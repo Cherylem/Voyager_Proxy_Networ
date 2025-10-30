@@ -7,41 +7,6 @@ import (
 	"time"
 )
 
-// Используем ip-api.com (бесплатно, без лимитов для некоммерческого использования)
-//func GetCountryByIPAPI(ip string) (string, error) {
-//	if ip == "" {
-//		return "Unknown", nil
-//	}
-//
-//	client := &http.Client{Timeout: 10 * time.Second}
-//	url := fmt.Sprintf("http://ip-api.com/json/%s?fields=country", ip)
-//
-//	resp, err := client.Get(url)
-//	if err != nil {
-//		return "", err
-//	}
-//	defer resp.Body.Close()
-//
-//	if resp.StatusCode != http.StatusOK {
-//		return "", fmt.Errorf("API returned status: %d", resp.StatusCode)
-//	}
-//
-//	var result struct {
-//		Country string `json:"country"`
-//		Status  string `json:"status"`
-//	}
-//
-//	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-//		return "", err
-//	}
-//
-//	if result.Status != "success" {
-//		return "Unknown", nil
-//	}
-//
-//	return result.Country, nil
-//}
-
 func GetCountryByIPAPI(ip string) (string, error) {
 	if ip == "" {
 		return "Unknown", nil

@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"time"
+	"vpn-client/core"
 	"vpn-client/models"
 	"vpn-client/services"
 
@@ -23,6 +25,8 @@ type Components struct {
 	isDarkTheme     bool
 	onUpdate        func()
 	onThemeChange   func(bool) // Callback для смены темы
+	vpnManager      *core.XrayManager
+	statsTimer      *time.Timer
 }
 
 func NewComponents() *Components {
@@ -31,11 +35,50 @@ func NewComponents() *Components {
 		selectedIndex: -1,
 		connections:   []models.Connection{},
 		isDarkTheme:   true, // По умолчанию светлая тема
+		vpnManager:    core.NewXrayManager(),
 	}
 
 	comp.loadConnections()
 	comp.createComponents()
 	return comp
+}
+
+func (c *Components) startStatsUpdate() {
+	c.statsTimer = time.AfterFunc(2*time.Second, func() {
+		c.updateStats()
+		c.startStatsUpdate() // Перезапускаем таймер
+	})
+}
+
+func (c *Components) updateStats() {
+	if c.vpnManager.IsRunning() {
+		stats := c.vpnManager.GetStats()
+		status := c.vpnManager.GetStatus()
+
+		// Форматируем статистику для отображения
+		upload := formatBytes(stats.UploadBytes)
+		download := formatBytes(stats.DownloadBytes)
+
+		statusText := fmt.Sprintf("%s\n⬆️ %s/s ⬇️ %s/s\n📡 Пинг: %dms",
+			status, upload, download, stats.Ping)
+
+		// Исправление: оборачиваем в fyne.Do
+		fyne.Do(func() {
+			c.statusLabel.SetText(statusText)
+		})
+	}
+}
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func (c *Components) SetOnUpdateCallback(callback func()) {
@@ -175,30 +218,31 @@ func (c *Components) deleteConnection(index int) {
 }
 
 func (c *Components) toggleConnection() {
-	if c.selectedIndex < 0 || c.selectedIndex >= len(c.connections) {
+	if c.selectedIndex < 0 {
 		return
 	}
-
-	c.isConnected = !c.isConnected
-	if c.isConnected {
-		c.connectButton.SetText("Отключиться")
-		c.statusLabel.SetText("Подключено к " + c.connections[c.selectedIndex].Name)
-		c.connectButton.Importance = widget.DangerImportance
-
-		for i := range c.connections {
-			if i == c.selectedIndex {
-				c.connections[i].Status = "connected"
-			} else {
-				c.connections[i].Status = "disconnected"
-			}
+	if !c.vpnManager.IsRunning() {
+		// Подключение
+		conn := c.connections[c.selectedIndex]
+		err := c.vpnManager.Start(&conn)
+		if err != nil {
+			fmt.Printf("❌ Connection failed: %v\n", err)
+			c.statusLabel.SetText("Ошибка подключения")
+			return
 		}
+		c.connectButton.SetText("Отключиться")
+		c.startStatsUpdate() // Запускаем обновление статистики
 	} else {
+		// Отключение
+		err := c.vpnManager.Stop()
+		if err != nil {
+			fmt.Printf("❌ Disconnection failed: %v\n", err)
+			return
+		}
 		c.connectButton.SetText("Подключиться")
 		c.statusLabel.SetText("Отключено")
-		c.connectButton.Importance = widget.HighImportance
-
-		for i := range c.connections {
-			c.connections[i].Status = "disconnected"
+		if c.statsTimer != nil {
+			c.statsTimer.Stop()
 		}
 	}
 	c.connectionsList.Refresh()
