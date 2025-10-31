@@ -104,6 +104,7 @@ func (c *Components) createComponents() {
 	c.statusLabel.Alignment = fyne.TextAlignCenter
 
 	c.connectButton = widget.NewButton("Подключиться", c.toggleConnection)
+	c.connectButton.Resize(fyne.NewSize(50, 80))
 	c.connectButton.Importance = widget.HighImportance
 
 	c.emptyLabel = widget.NewLabel("Нет сохраненных подключений\n\nДобавьте первое подключение через меню \"Файл\"")

@@ -277,7 +277,7 @@ func (x *XrayManager) monitorProcess(cmd *exec.Cmd) {
 	}
 	x.isRunning = false
 
-	// Очищаем системный прокси при выходе
+	// Очищаем системный прокс и при выходе
 	x.ClearSystemProxy()
 
 	fmt.Printf("⚠️ Xray process exited with code: %d\n", state.ExitCode())

@@ -69,9 +69,9 @@ func (tm *TrayManager) setTrayIcon(connected bool) {
 	if desk, ok := tm.app.(desktop.App); ok {
 		var iconPath string
 		if connected {
-			iconPath = "assets/green_icon.png"
+			iconPath = "assets/tray_purple_icon.png"
 		} else {
-			iconPath = "assets/grey_icon.png"
+			iconPath = "assets/tray_red_icon.png"
 		}
 
 		icon, err := fyne.LoadResourceFromPath(iconPath)
