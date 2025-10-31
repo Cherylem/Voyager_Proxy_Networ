@@ -1,6 +1,6 @@
 # Voyager Proxy Network
 
-![Voyager Logo](assets/64X64.png)
+![Voyager Logo](assets/light_image.png)
 
 Современное, удобное VPN-приложение, разработанное на языке Go с использованием фреймворка Fyne UI. Voyager Proxy Network предоставляет безопасный способ управления VPN-соединениями через простой и минималистичный интерфейс. Проект реализует сложное решение для прокси-сетей с акцентом на безопасность, производительность и удобство использования.
 
@@ -36,41 +36,63 @@
 - **Go Modules** - Управление зависимостями
 - **Git** - Система контроля версий
 
-## ✨ Key Features
+## ✨ Ключевые возможности
 
-### Connection Management
-- 🔒 Secure VPN connection handling with multiple protocol support
-- 🔄 Automatic reconnection and connection health monitoring
-- 📊 Real-time connection statistics and diagnostics
-- 🌡️ Connection quality indicators and latency monitoring
+### Управление соединением
+- 🔒 Надёжная обработка VPN-соединений с поддержкой нескольких протоколов
+- 🔄 Автоматическое переподключение и мониторинг состояния соединения
+- 📊 Статистика и диагностика соединения в реальном времени
+- 🌡️ Индикаторы качества соединения и мониторинг задержек
 
-### User Interface
-- 🎨 Modern, minimal, and intuitive interface design
-- 🌓 Dark/Light theme support with custom styling
-- 🖥️ Cross-platform desktop application (primary support for macOS)
-- 🔔 System tray integration with status indicators
-- 📱 Responsive layout for different window sizes
+### Пользовательский интерфейс
+- 🎨 Современный, минималистичный и интуитивно понятный дизайн интерфейса
+- 🌓 Поддержка светлой/тёмной темы с кастомной стилизацией
+- 🖥️ Кроссплатформенное настольное приложение (приоритетная поддержка macOS)
+- 🔔 Интеграция с системным треем со статус-индикаторами
+- 📱 Адаптивная вёрстка для разных размеров окна
 
-### Configuration & Settings
-- ⚙️ Advanced configuration management system
-- 📥 Import/Export configuration functionality
-- � Custom proxy settings configuration
-- 📝 Connection profiles management
-- 🔍 Configuration validation and error checking
+### Конфигурация и настройки
+- ⚙️ Продвинутая система управления конфигурациями
+- 📥 Функции импорта/экспорта конфигураций
+- � Настройка пользовательских прокси-параметров
+- 📝 Управление профилями подключений
+- 🔍 Валидация конфигураций и проверка на ошибки
 
-### Security Features
-- 🛡️ Multiple security protocol support (VLESS, VMess, Trojan, Shadowsocks)
-- 🔐 Encrypted connections and secure data transmission
-- �️ IP address leak prevention
-- 🚦 Traffic routing policies
-- 🌐 DNS leak protection
+### Функции безопасности
+- 🛡️ Поддержка нескольких протоколов безопасности (VLESS, VMess, Trojan, Shadowsocks)
+- 🔐 Шифрование соединений и безопасная передача данных
+- �️ Предотвращение утечек IP-адреса
+- 🚦 Политики маршрутизации трафика
+- 🌐 Защита от утечек DNS
 
-### System Integration
-- 💻 Native system tray integration
-- 🚀 Lightweight system resource usage
-- 📊 System-wide proxy configuration
-- 🔄 Automatic updates support
-- 📡 Network interface management
+### Интеграция с системой
+- 💻 Нативная интеграция с системным треем
+- 🚀 Лёгкое потребление системных ресурсов
+- 📊 Глобальная (системная) конфигурация прокси
+- 🔄 Поддержка автоматических обновлений
+- 📡 Управление сетевыми интерфейсами
+
+### Поддержка Reality (stream security)
+
+- 🔒 Reality — это тип stream security/транспортной обфускации, используемый совместно с протоколами (например, VLESS) в Xray/V2Ray. Это не отдельный пользовательский протокол (как VLESS или VMess), а способ защищённой и маскируемой передачи трафика.
+
+## Реализованные функции
+
+- Генерация конфигурации Xray с поддержкой Reality (реализовано в `core/xray_config.go`)
+- Поддержка протоколов: VLESS, VMess, Trojan, Shadowsocks
+- Интеграция с системным треем и управление состоянием из трея
+- Локальное хранение конфигураций в JSON и базовые операции импорта/экспорта
+- UI на Fyne: главное окно, базовые компоненты и адаптивная вёрстка
+- Сборка и автоматизация через Makefile
+- Определение страны сервра и отображение в UI 
+
+## Планируемые функции
+
+- Расширенные возможности импорта/экспорта конфигураций и миграция профилей
+- Автоматические обновления приложения (OTA)
+- Расширенная диагностика и графики статистики соединений в реальном времени
+- Более строгая валидация конфигураций и удобный менеджер профилей в UI
+- Поддержка дополнительных транспортов/обфускаций и мобильных платформ
 
 ## Требования
 
