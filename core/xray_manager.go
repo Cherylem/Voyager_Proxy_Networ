@@ -3,6 +3,7 @@ package core
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +14,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"strconv"
+	"sync"
 	"time"
 
 	"vpn-client/models"
@@ -24,6 +27,7 @@ type XrayManager struct {
 	xrayPath      string
 	isRunning     bool
 	stats         *XrayStats
+	statsMu       sync.RWMutex
 	restartCount  int
 	currentConfig *models.Connection
 }
@@ -465,23 +469,161 @@ func (x *XrayManager) checkPortListening(port int) bool {
 func (x *XrayManager) monitorStats() {
 	for x.isRunning {
 		stats, err := x.getStats()
-		if err == nil {
+		if err == nil && stats != nil {
+			x.statsMu.Lock()
 			x.stats = stats
 			x.stats.LastUpdate = time.Now()
+			x.statsMu.Unlock()
+			// Debug: print received snapshot
+			fmt.Printf("[monitorStats] snapshot: upload=%d download=%d ping=%d connections=%d\n",
+				stats.UploadBytes, stats.DownloadBytes, stats.Ping, stats.ConnectionCount)
 		}
-		time.Sleep(5 * time.Second)
+		if err != nil {
+			fmt.Printf("[monitorStats] getStats error: %v\n", err)
+		}
+		time.Sleep(1 * time.Second)
 	}
 }
 
 // getStats получает статистику через Xray API
 func (x *XrayManager) getStats() (*XrayStats, error) {
-	// TODO: Реализовать получение реальной статистики через Xray API
-	return &XrayStats{
-		UploadBytes:     1024 * 1024 * 5,
-		DownloadBytes:   1024 * 1024 * 10,
-		Ping:            45,
-		ConnectionCount: 12,
-	}, nil
+	// Попытка получить статистику через локальный Xray API (если он слушает)
+	apiCandidates := []string{
+		"http://127.0.0.1:10085/stats",
+		"http://127.0.0.1:10086/stats",
+		"http://127.0.0.1:8080/stats",
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	for _, u := range apiCandidates {
+		resp, err := client.Get(u)
+		if err != nil {
+			continue
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil || resp.StatusCode != http.StatusOK {
+			continue
+		}
+
+		// Debug: print HTTP body (truncated) so we can see exact format returned by admin API
+		bodyStr := string(body)
+		if len(bodyStr) > 2000 {
+			bodyStr = bodyStr[:2000] + "...(truncated)"
+		}
+		fmt.Printf("[getStats] HTTP %s -> %s\n", u, bodyStr)
+
+		// Пытаемся распарсить JSON в нескольких вариантах: простой ключ-число
+		var parsed interface{}
+		if err := json.Unmarshal(body, &parsed); err == nil {
+			// рекурсивный поиск числовых полей по подстроке ключа
+			var findNumber func(interface{}, string) (int64, bool)
+			findNumber = func(v interface{}, substr string) (int64, bool) {
+				switch t := v.(type) {
+				case map[string]interface{}:
+					for k, val := range t {
+						if strings.Contains(strings.ToLower(k), substr) {
+							switch nv := val.(type) {
+							case float64:
+								return int64(nv), true
+							case string:
+								if n, err := strconv.ParseInt(nv, 10, 64); err == nil {
+									return n, true
+								}
+							}
+						}
+						if res, ok := findNumber(val, substr); ok {
+							return res, true
+						}
+					}
+				case []interface{}:
+					for _, item := range t {
+						if res, ok := findNumber(item, substr); ok {
+							return res, true
+						}
+					}
+				}
+				return 0, false
+			}
+
+			stats := &XrayStats{}
+			if v, ok := findNumber(parsed, "upload"); ok {
+				stats.UploadBytes = v
+			}
+			if v, ok := findNumber(parsed, "download"); ok {
+				stats.DownloadBytes = v
+			}
+			// общие альтернативы
+			if stats.UploadBytes == 0 {
+				if v, ok := findNumber(parsed, "sent"); ok {
+					stats.UploadBytes = v
+				}
+			}
+			if stats.DownloadBytes == 0 {
+				if v, ok := findNumber(parsed, "recv"); ok {
+					stats.DownloadBytes = v
+				}
+			}
+			if v, ok := findNumber(parsed, "ping"); ok {
+				stats.Ping = int(v)
+			}
+			if v, ok := findNumber(parsed, "connection"); ok {
+				stats.ConnectionCount = int(v)
+			}
+			stats.LastUpdate = time.Now()
+			// Если нашли хотя бы что-то — вернём
+			if stats.UploadBytes != 0 || stats.DownloadBytes != 0 || stats.Ping != 0 || stats.ConnectionCount != 0 {
+				return stats, nil
+			}
+		}
+	}
+
+	// Фоллбек: попробуем спарсить access.log (если есть) — best-effort
+	accessPath := x.getLogPath("access.log")
+	f, err := os.Open(accessPath)
+	if err != nil {
+		return nil, fmt.Errorf("no stats available: %v", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	var totalBytes int64
+	var ips = make(map[string]struct{})
+	for scanner.Scan() {
+		line := scanner.Text()
+		// ищем все IP-адреса в строке
+		for _, part := range strings.Fields(line) {
+			if ip := net.ParseIP(strings.Trim(part, ",[]()")); ip != nil {
+				ips[ip.String()] = struct{}{}
+			}
+		}
+		// ищем числа в конце строки как пример размера
+		// naive: берем последнее число в строке
+		parts := strings.Fields(line)
+		if len(parts) > 0 {
+			last := parts[len(parts)-1]
+			if n, err := strconv.ParseInt(strings.Trim(last, ",."), 10, 64); err == nil {
+				totalBytes += n
+			}
+		}
+	}
+
+	stats := &XrayStats{
+		UploadBytes:     0,
+		DownloadBytes:   totalBytes,
+		Ping:            0,
+		ConnectionCount: len(ips),
+	}
+
+	// попробуем измерить пинг быстрым TCP dial
+	start := time.Now()
+	conn, err := net.DialTimeout("tcp", "8.8.8.8:53", 2*time.Second)
+	if err == nil {
+		stats.Ping = int(time.Since(start).Milliseconds())
+		conn.Close()
+	}
+
+	return stats, nil
 }
 
 // healthCheck проверяет работоспособность VPN
@@ -532,13 +674,24 @@ func (x *XrayManager) Stop() error {
 	x.isRunning = false
 	x.process = nil
 
+	x.statsMu.Lock()
+	x.stats = &XrayStats{}
+	x.statsMu.Unlock()
+
 	fmt.Println("✅ Xray stopped")
 	return nil
 }
 
 // GetStats возвращает текущую статистику
 func (x *XrayManager) GetStats() *XrayStats {
-	return x.stats
+	x.statsMu.RLock()
+	defer x.statsMu.RUnlock()
+	if x.stats == nil {
+		return &XrayStats{}
+	}
+	// return a copy to avoid races
+	copy := *x.stats
+	return &copy
 }
 
 // IsRunning возвращает статус работы

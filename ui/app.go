@@ -32,7 +32,7 @@ func (v *VPNApp) initialize() {
 	v.app = app.NewWithID("com.vpn.client")
 
 	// ПЕРВОЕ: создаем окно
-	v.window = v.app.NewWindow("VPN Client")
+	v.window = v.app.NewWindow("Voyager Proxy Network")
 	v.window.SetMaster()
 	v.window.Resize(fyne.NewSize(500, 650))
 	v.window.CenterOnScreen()
@@ -70,7 +70,7 @@ func (v *VPNApp) initialize() {
 // Добавляем метод для установки иконки окна
 func (v *VPNApp) setWindowIcon() {
 	// Пробуем загрузить иконку из assets
-	icon, err := fyne.LoadResourceFromPath("assets/64X64.png")
+	icon, err := fyne.LoadResourceFromPath("assets/AppIcon/dark_icon/apple-devices/AppIcon.appiconset/icon-ios-64x64@2x.png")
 	if err != nil {
 		fmt.Printf("Не удалось загрузить иконку окна: %v\n", err)
 

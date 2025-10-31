@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"vpn-client/core"
 	"vpn-client/models"
@@ -16,9 +17,10 @@ import (
 type Components struct {
 	connectionsList *widget.List
 	statusLabel     *widget.Label
-	connectButton   *widget.Button
+	connectButton   *ImageButton
 	emptyLabel      *widget.Label
 	themeSwitch     *widget.Button
+	showStatsCheck  *widget.Check
 	connections     []models.Connection
 	selectedIndex   int
 	isConnected     bool
@@ -27,6 +29,8 @@ type Components struct {
 	onThemeChange   func(bool) // Callback для смены темы
 	vpnManager      *core.XrayManager
 	statsTimer      *time.Timer
+	showStats       bool
+	prevStats       *core.XrayStats
 }
 
 func NewComponents() *Components {
@@ -44,41 +48,97 @@ func NewComponents() *Components {
 }
 
 func (c *Components) startStatsUpdate() {
-	c.statsTimer = time.AfterFunc(2*time.Second, func() {
+	c.statsTimer = time.AfterFunc(1*time.Second, func() {
 		c.updateStats()
 		c.startStatsUpdate() // Перезапускаем таймер
 	})
 }
 
 func (c *Components) updateStats() {
-	if c.vpnManager.IsRunning() {
-		stats := c.vpnManager.GetStats()
-		status := c.vpnManager.GetStatus()
+	// Всегда обновляем UI — переводим статус на русский и показываем/скрываем статистику
+	stats := c.vpnManager.GetStats()
+	status := c.vpnManager.GetStatus()
 
-		// Форматируем статистику для отображения
-		upload := formatBytes(stats.UploadBytes)
-		download := formatBytes(stats.DownloadBytes)
+	// Перевод статуса на русский
+	var statusRus string
+	switch strings.ToLower(status) {
+	case "connected":
+		statusRus = "Подключено"
+	case "connecting":
+		statusRus = "Подключение"
+	case "stopped", "disconnected", "":
+		statusRus = "Отключено"
+	default:
+		statusRus = status
+	}
 
-		statusText := fmt.Sprintf("%s\n⬆️ %s/s ⬇️ %s/s\n📡 Пинг: %dms",
-			status, upload, download, stats.Ping)
-
-		// Исправление: оборачиваем в fyne.Do
+	// Если не запущено — показываем только статус Отключено и очищаем prevStats
+	if !c.vpnManager.IsRunning() {
+		c.prevStats = nil
 		fyne.Do(func() {
-			c.statusLabel.SetText(statusText)
+			c.statusLabel.SetText(statusRus)
 		})
+		return
 	}
+
+	// Если пользователь выключил отображение статистики — показываем соответствующий текст
+	if !c.showStats {
+		fyne.Do(func() {
+			c.statusLabel.SetText(statusRus + "\nСтатистика отключена")
+		})
+		return
+	}
+
+	// Получаем новые накопительные значения от менеджера
+	cur := stats
+
+	// Если нет предыдущих данных — сохранем и покажем базовый статус
+	if c.prevStats == nil {
+		c.prevStats = cur
+		fyne.Do(func() {
+			c.statusLabel.SetText(statusRus + "\nСбор статистики...")
+		})
+		return
+	}
+
+	// Рассчитываем скорость как дельта байт / дельта секунд
+	deltaSec := cur.LastUpdate.Sub(c.prevStats.LastUpdate).Seconds()
+	if deltaSec <= 0 {
+		deltaSec = 1
+	}
+
+	uploadRate := int64(0)
+	downloadRate := int64(0)
+	if cur.UploadBytes >= c.prevStats.UploadBytes {
+		uploadRate = int64(float64(cur.UploadBytes-c.prevStats.UploadBytes) / deltaSec)
+	}
+	if cur.DownloadBytes >= c.prevStats.DownloadBytes {
+		downloadRate = int64(float64(cur.DownloadBytes-c.prevStats.DownloadBytes) / deltaSec)
+	}
+
+	statusText := fmt.Sprintf("%s\n⬆️ %s/s ⬇️ %s/s\n📡 Пинг: %dms",
+		statusRus, formatBytes(uploadRate), formatBytes(downloadRate), cur.Ping)
+
+	// Сохраняем текущие данные как предыдущие для следующего расчёта
+	c.prevStats = cur
+
+	// Обновляем UI
+	fyne.Do(func() {
+		c.statusLabel.SetText(statusText)
+	})
 }
+
 func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+    const unit = 1024
+    if bytes < unit {
+        return fmt.Sprintf("%d B", bytes)
+    }
+    div, exp := int64(unit), 0
+    for n := bytes / unit; n >= unit; n /= unit {
+        div *= unit
+        exp++
+    }
+    return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func (c *Components) SetOnUpdateCallback(callback func()) {
@@ -103,9 +163,34 @@ func (c *Components) createComponents() {
 	c.statusLabel = widget.NewLabel("Готов к подключению")
 	c.statusLabel.Alignment = fyne.TextAlignCenter
 
-	c.connectButton = widget.NewButton("Подключиться", c.toggleConnection)
-	c.connectButton.Resize(fyne.NewSize(50, 80))
-	c.connectButton.Importance = widget.HighImportance
+	// Попытка загрузить иконку для кнопки подключения
+	connectIcon, err1 := fyne.LoadResourceFromPath("assets/white_icon.png")
+
+	var startIcon fyne.Resource
+	if err1 == nil {
+		startIcon = connectIcon
+	}
+
+	// Создаем кликабельное изображение-кнопку (даже если иконки нет - создаем пустой)
+	c.connectButton = NewImageButton(startIcon, c.toggleConnection)
+	// Поставим удобный размер по умолчанию — можно изменить позднее
+	c.connectButton.SetSize(fyne.NewSize(96, 96))
+	// Устанавливаем корректную иконку состояния (по умолчанию отключено)
+	c.updateConnectIcon(false)
+
+	// Чекбокс для включения/выключения отображения статистики
+	c.showStats = false
+	c.showStatsCheck = widget.NewCheck("Показывать статистику", func(checked bool) {
+		c.showStats = checked
+		if !checked {
+			// очистим предыдущие значения и UI
+			c.prevStats = nil
+			fyne.Do(func() {
+				c.statusLabel.SetText("Статистика отключена")
+			})
+		}
+	})
+	c.showStatsCheck.SetChecked(false)
 
 	c.emptyLabel = widget.NewLabel("Нет сохраненных подключений\n\nДобавьте первое подключение через меню \"Файл\"")
 	c.emptyLabel.Alignment = fyne.TextAlignCenter
@@ -181,6 +266,34 @@ func (c *Components) updateThemeButton() {
 	}
 }
 
+// Обновляет иконку кнопки подключения в зависимости от состояния
+func (c *Components) updateConnectIcon(connected bool) {
+	if c.connectButton == nil {
+		return
+	}
+	// Попытка загрузить иконки
+	connectIcon, _ := fyne.LoadResourceFromPath("assets/tray_purple_icon.png")
+	disconnectIcon, _ := fyne.LoadResourceFromPath("assets/white_icon.png")
+
+	// Если ни одной иконки нет — просто ничего не делаем
+	if connectIcon == nil && disconnectIcon == nil {
+		return
+	}
+
+	if connected {
+		if disconnectIcon != nil {
+			c.connectButton.SetResource(disconnectIcon)
+		}
+	} else {
+		if connectIcon != nil {
+			c.connectButton.SetResource(connectIcon)
+		} else {
+			// если нет стартовой иконки, очистим изображение
+			c.connectButton.SetResource(nil)
+		}
+	}
+}
+
 func (c *Components) deleteConnection(index int) {
 	if index < 0 || index >= len(c.connections) {
 		return
@@ -197,9 +310,9 @@ func (c *Components) deleteConnection(index int) {
 
 	if len(c.connections) == 0 {
 		c.isConnected = false
-		c.connectButton.SetText("Подключиться")
+		c.updateConnectIcon(false)
 		c.statusLabel.SetText("Готов к подключению")
-		c.connectButton.Importance = widget.HighImportance
+		// nothing to change for ImageButton importance
 	}
 
 	config := &services.AppConfig{Connections: c.connections}
@@ -231,7 +344,8 @@ func (c *Components) toggleConnection() {
 			c.statusLabel.SetText("Ошибка подключения")
 			return
 		}
-		c.connectButton.SetText("Отключиться")
+		c.updateConnectIcon(true)
+		c.isConnected = true
 		c.startStatsUpdate() // Запускаем обновление статистики
 	} else {
 		// Отключение
@@ -240,11 +354,13 @@ func (c *Components) toggleConnection() {
 			fmt.Printf("❌ Disconnection failed: %v\n", err)
 			return
 		}
-		c.connectButton.SetText("Подключиться")
-		c.statusLabel.SetText("Отключено")
+		c.updateConnectIcon(false)
+		c.isConnected = false
 		if c.statsTimer != nil {
 			c.statsTimer.Stop()
 		}
+		// Обновим UI немедленно после остановки
+		c.updateStats()
 	}
 	c.connectionsList.Refresh()
 	if c.onUpdate != nil {
@@ -268,6 +384,7 @@ func (c *Components) GetMainContent() fyne.CanvasObject {
 	statusCard := container.NewVBox(
 		container.NewCenter(c.statusLabel),
 		container.NewCenter(c.connectButton),
+		container.NewCenter(c.showStatsCheck),
 	)
 
 	connectionsTitle := widget.NewLabel("Доступные подключения")

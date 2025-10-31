@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -72,10 +73,29 @@ func ParseVLESS(vlessURL string) (*models.Connection, error) {
 		Country:  "Unknown",
 	}
 	go func() {
-		country, err := GetCountryByIPAPI(conn.Server)
+		serverAddr := conn.Server
+		// Если server содержит доменное имя, попробуем получить IP
+		if net.ParseIP(serverAddr) == nil {
+			ips, err := net.LookupIP(serverAddr)
+			if err == nil && len(ips) > 0 {
+				// выбираем первый IPv4 если есть
+				for _, ip := range ips {
+					if ip.To4() != nil {
+						serverAddr = ip.String()
+						break
+					}
+				}
+				// если не нашли IPv4, возьмем первый
+				if net.ParseIP(serverAddr) == nil && len(ips) > 0 {
+					serverAddr = ips[0].String()
+				}
+			}
+		}
+
+		country, err := GetCountryByIPAPI(serverAddr)
 		if err == nil && country != "" && country != "Unknown" {
 			conn.Country = country
-			// Здесь нужно обновить UI, но для этого нужен механизм обновления
+			// UI обновление можно выполнить через callback если потребуется
 		}
 	}()
 	// Извлекаем основные параметры
