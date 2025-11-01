@@ -99,9 +99,9 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 			Services: []string{"StatsService", "HandlerService"},
 		},
 		Inbounds: []Inbound{
-			{
+				{
 				Tag:      "socks-in",
-				Port:     1080,
+				Port:     x.socksPort,
 				Listen:   "127.0.0.1",
 				Protocol: "socks",
 				Settings: json.RawMessage(`{
@@ -114,9 +114,9 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 					DestOverride: []string{"http", "tls", "quic"},
 				},
 			},
-			{
+				{
 				Tag:      "http-in",
-				Port:     1081,
+				Port:     x.httpPort,
 				Listen:   "127.0.0.1",
 				Protocol: "http",
 				Settings: json.RawMessage(`{
@@ -130,11 +130,9 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 				},
 			},
 		},
-		Outbounds: []Outbound{
-			{
-				Tag:      "proxy",
-				Protocol: "vless",
-				Settings: json.RawMessage(fmt.Sprintf(`{
+		Outbounds: func() []Outbound {
+			// Build proxy outbound and only attach StreamSettings for Reality when we have required fields.
+			proxySettings := json.RawMessage(fmt.Sprintf(`{
 					"vnext": [{
 						"address": "%s",
 						"port": %d,
@@ -145,8 +143,18 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 							"level": 0
 						}]
 					}]
-				}`, conn.Server, conn.Port, conn.UUID, conn.Flow)),
-				StreamSettings: &StreamSettings{
+				}`, conn.Server, conn.Port, conn.UUID, conn.Flow))
+
+			proxyOutbound := Outbound{
+				Tag:      "proxy",
+				Protocol: "vless",
+				Settings: proxySettings,
+			}
+
+			// Only enable Reality streamSettings when it's explicitly requested or we have necessary params
+			if conn.Security == "reality" || (conn.PBK != "" && conn.SID != "") {
+				// If critical Reality fields are missing, log a warning but avoid producing invalid config
+				proxyOutbound.StreamSettings = &StreamSettings{
 					Network:  "tcp",
 					Security: "reality",
 					RealitySettings: &RealitySettings{
@@ -154,30 +162,40 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 						ServerName:   conn.SNI,
 						PublicKey:    conn.PBK,
 						ShortId:      conn.SID,
-						SpiderX:      "/",
+						SpiderX:      conn.SPX,
 						MinClientVer: "",
 						MaxClientVer: "",
 						MaxTimeDiff:  0,
 					},
-				},
-			},
-			{
-				Tag:      "direct",
-				Protocol: "freedom",
-				Settings: json.RawMessage(`{
+				}
+			} else {
+				// Default to plain TCP without additional security
+				proxyOutbound.StreamSettings = &StreamSettings{
+					Network:  "tcp",
+					Security: "none",
+				}
+			}
+
+			return []Outbound{
+				proxyOutbound,
+				{
+					Tag:      "direct",
+					Protocol: "freedom",
+					Settings: json.RawMessage(`{
 					"domainStrategy": "AsIs"
 				}`),
-			},
-			{
-				Tag:      "block",
-				Protocol: "blackhole",
-				Settings: json.RawMessage(`{
+				},
+				{
+					Tag:      "block",
+					Protocol: "blackhole",
+					Settings: json.RawMessage(`{
 					"response": {
 						"type": "http"
 					}
 				}`),
-			},
-		},
+				},
+			}
+		}(),
 		Routing: RoutingConfig{
 			DomainStrategy: "IPIfNonMatch",
 			Rules: []RoutingRule{

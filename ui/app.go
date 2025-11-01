@@ -2,14 +2,15 @@ package ui
 
 import (
 	"fmt"
-	"vpn-client/models"
-	"vpn-client/services"
-	"vpn-client/themes"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+
+	"vpn-client/models"
+	"vpn-client/services"
+	"vpn-client/themes"
 )
 
 type VPNApp struct {
@@ -70,7 +71,7 @@ func (v *VPNApp) initialize() {
 // Добавляем метод для установки иконки окна
 func (v *VPNApp) setWindowIcon() {
 	// Пробуем загрузить иконку из assets
-	icon, err := fyne.LoadResourceFromPath("assets/AppIcon/dark_icon/apple-devices/AppIcon.appiconset/icon-ios-64x64@2x.png")
+	icon, err := fyne.LoadResourceFromPath("assets/white_icon.png")
 	if err != nil {
 		fmt.Printf("Не удалось загрузить иконку окна: %v\n", err)
 

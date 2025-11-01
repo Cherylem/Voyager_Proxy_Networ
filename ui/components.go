@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 	"vpn-client/core"
@@ -129,16 +130,16 @@ func (c *Components) updateStats() {
 }
 
 func formatBytes(bytes int64) string {
-    const unit = 1024
-    if bytes < unit {
-        return fmt.Sprintf("%d B", bytes)
-    }
-    div, exp := int64(unit), 0
-    for n := bytes / unit; n >= unit; n /= unit {
-        div *= unit
-        exp++
-    }
-    return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func (c *Components) SetOnUpdateCallback(callback func()) {
@@ -162,7 +163,8 @@ func (c *Components) loadConnections() {
 func (c *Components) createComponents() {
 	c.statusLabel = widget.NewLabel("Готов к подключению")
 	c.statusLabel.Alignment = fyne.TextAlignCenter
-
+	wd, _ := os.Getwd()
+	fmt.Println("Current working directory:", wd)
 	// Попытка загрузить иконку для кнопки подключения
 	connectIcon, err1 := fyne.LoadResourceFromPath("assets/white_icon.png")
 
@@ -180,8 +182,12 @@ func (c *Components) createComponents() {
 
 	// Чекбокс для включения/выключения отображения статистики
 	c.showStats = false
-	c.showStatsCheck = widget.NewCheck("Показывать статистику", func(checked bool) {
+	c.showStatsCheck = widget.NewCheck("Показывать статистику(в разработке)", func(checked bool) {
 		c.showStats = checked
+		// tell vpn manager to enable/disable stats collection to save resources
+		if c.vpnManager != nil {
+			c.vpnManager.EnableStats(checked)
+		}
 		if !checked {
 			// очистим предыдущие значения и UI
 			c.prevStats = nil

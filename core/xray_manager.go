@@ -3,6 +3,7 @@ package core
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,8 +14,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,12 @@ type XrayManager struct {
 	statsMu       sync.RWMutex
 	restartCount  int
 	currentConfig *models.Connection
+	socksPort     int
+	httpPort      int
+	// stats control
+	statsEnabled bool
+	statsCtx     context.Context
+	statsCancel  context.CancelFunc
 }
 
 type XrayStats struct {
@@ -42,7 +49,10 @@ type XrayStats struct {
 
 func NewXrayManager() *XrayManager {
 	return &XrayManager{
-		stats: &XrayStats{},
+		stats:        &XrayStats{},
+		socksPort:    1080,
+		httpPort:     1081,
+		statsEnabled: false,
 	}
 }
 
@@ -200,7 +210,32 @@ func (x *XrayManager) Start(conn *models.Connection) error {
 		return fmt.Errorf("xray binary not available: %v", err)
 	}
 
-	// 2. Генерируем конфиг
+	// Reset preferred ports to standard defaults on each Start attempt
+	x.socksPort = 1080
+	x.httpPort = 1081
+
+	// If standard ports are occupied, pick free ports dynamically.
+	// We intentionally try standard ports first every Start as requested.
+	if x.checkPortListening(x.socksPort) {
+		newPort, err := getFreePort()
+		if err == nil {
+			fmt.Printf("⚠️ socks port %d busy, switching to %d\n", x.socksPort, newPort)
+			x.socksPort = newPort
+		} else {
+			fmt.Printf("⚠️ socks port %d busy and failed to find free port: %v\n", x.socksPort, err)
+		}
+	}
+	if x.checkPortListening(x.httpPort) {
+		newPort, err := getFreePort()
+		if err == nil {
+			fmt.Printf("⚠️ http port %d busy, switching to %d\n", x.httpPort, newPort)
+			x.httpPort = newPort
+		} else {
+			fmt.Printf("⚠️ http port %d busy and failed to find free port: %v\n", x.httpPort, err)
+		}
+	}
+
+	// 2. Генерируем конфиг (uses x.socksPort/x.httpPort)
 	configPath, err := x.GenerateConfig(conn)
 	if err != nil {
 		return fmt.Errorf("failed to generate config: %v", err)
@@ -230,6 +265,7 @@ func (x *XrayManager) Start(conn *models.Connection) error {
 		return err
 	}
 
+	// Start the process
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start xray: %v", err)
 	}
@@ -266,8 +302,16 @@ func (x *XrayManager) Start(conn *models.Connection) error {
 	// Запускаем отдельную горутину для ожидания процесса
 	go x.monitorProcess(cmd)
 
-	// 11. Запускаем мониторинг
-	go x.monitorStats()
+	// 11. Запускаем мониторинг статистики только если включено
+	if x.statsEnabled {
+		// create a cancellable context for stats loop
+		if x.statsCtx == nil {
+			x.statsCtx, x.statsCancel = context.WithCancel(context.Background())
+		}
+		go x.monitorStats(x.statsCtx)
+	}
+
+	// health check always runs
 	go x.healthCheck()
 
 	return nil
@@ -314,7 +358,7 @@ func (x *XrayManager) SetupSystemProxy() error {
 
 func (x *XrayManager) setupWindowsProxy() error {
 	// Настройка HTTP прокси
-	cmd := exec.Command("netsh", "winhttp", "set", "proxy", "127.0.0.1:1081")
+	cmd := exec.Command("netsh", "winhttp", "set", "proxy", fmt.Sprintf("127.0.0.1:%d", x.httpPort))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to set windows proxy: %v, output: %s", err, output)
 	}
@@ -334,11 +378,11 @@ func (x *XrayManager) setupMacOSProxy() error {
 		service := strings.TrimSpace(scanner.Text())
 		if service != "" && !strings.Contains(service, "*") {
 			// Настройка HTTP прокси
-			exec.Command("networksetup", "-setwebproxy", service, "127.0.0.1", "1081").Run()
+			exec.Command("networksetup", "-setwebproxy", service, "127.0.0.1", fmt.Sprintf("%d", x.httpPort)).Run()
 			// Настройка HTTPS прокси
-			exec.Command("networksetup", "-setsecurewebproxy", service, "127.0.0.1", "1081").Run()
+			exec.Command("networksetup", "-setsecurewebproxy", service, "127.0.0.1", fmt.Sprintf("%d", x.httpPort)).Run()
 			// Настройка SOCKS прокси
-			exec.Command("networksetup", "-setsocksfirewallproxy", service, "127.0.0.1", "1080").Run()
+			exec.Command("networksetup", "-setsocksfirewallproxy", service, "127.0.0.1", fmt.Sprintf("%d", x.socksPort)).Run()
 
 			// Включаем прокси
 			exec.Command("networksetup", "-setwebproxystate", service, "on").Run()
@@ -385,7 +429,7 @@ func (x *XrayManager) ClearSystemProxy() error {
 
 // TestConnection проверяет что прокси работает
 func (x *XrayManager) TestConnection() bool {
-	proxyURL, err := url.Parse("http://127.0.0.1:1081")
+	proxyURL, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", x.httpPort))
 	if err != nil {
 		fmt.Printf("❌ Failed to parse proxy URL: %v\n", err)
 		return false
@@ -446,7 +490,7 @@ func (x *XrayManager) readLogs(stdout, stderr io.Reader) {
 
 // checkPorts проверяет что порты слушают
 func (x *XrayManager) checkPorts() {
-	ports := []int{1080, 1081}
+	ports := []int{x.socksPort, x.httpPort}
 	for _, port := range ports {
 		if x.checkPortListening(port) {
 			fmt.Printf("✅ PORT %d is listening\n", port)
@@ -465,23 +509,63 @@ func (x *XrayManager) checkPortListening(port int) bool {
 	return true
 }
 
+// getPortOwner attempts to find which process is listening on the given port (macOS/Linux via lsof).
+func (x *XrayManager) getPortOwner(port int) string {
+	// Only attempt on unix-like systems where lsof is available
+	if runtime.GOOS == "windows" {
+		return "port busy"
+	}
+
+	cmd := exec.Command("lsof", "-nP", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return strings.TrimSpace(out.String())
+	}
+	return strings.TrimSpace(out.String())
+}
+
+// getFreePort asks the kernel for an available port by binding to :0 and returning the assigned port.
+func getFreePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	addr := l.Addr().(*net.TCPAddr)
+	return addr.Port, nil
+}
+
 // monitorStats собирает статистику из Xray API
-func (x *XrayManager) monitorStats() {
-	for x.isRunning {
-		stats, err := x.getStats()
-		if err == nil && stats != nil {
-			x.statsMu.Lock()
-			x.stats = stats
-			x.stats.LastUpdate = time.Now()
-			x.statsMu.Unlock()
-			// Debug: print received snapshot
-			fmt.Printf("[monitorStats] snapshot: upload=%d download=%d ping=%d connections=%d\n",
-				stats.UploadBytes, stats.DownloadBytes, stats.Ping, stats.ConnectionCount)
+func (x *XrayManager) monitorStats(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("[monitorStats] stopped by context")
+			return
+		case <-ticker.C:
+			if !x.isRunning {
+				continue
+			}
+			stats, err := x.getStats()
+			if err == nil && stats != nil {
+				x.statsMu.Lock()
+				x.stats = stats
+				if x.stats.LastUpdate.IsZero() {
+					x.stats.LastUpdate = time.Now()
+				}
+				x.statsMu.Unlock()
+				// Debug: print received snapshot
+				fmt.Printf("[monitorStats] snapshot: upload=%d download=%d ping=%d connections=%d\n",
+					stats.UploadBytes, stats.DownloadBytes, stats.Ping, stats.ConnectionCount)
+			}
+			if err != nil {
+				fmt.Printf("[monitorStats] getStats error: %v\n", err)
+			}
 		}
-		if err != nil {
-			fmt.Printf("[monitorStats] getStats error: %v\n", err)
-		}
-		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -513,66 +597,66 @@ func (x *XrayManager) getStats() (*XrayStats, error) {
 		}
 		fmt.Printf("[getStats] HTTP %s -> %s\n", u, bodyStr)
 
-		// Пытаемся распарсить JSON в нескольких вариантах: простой ключ-число
+		// Пытаемся распарсить JSON и аккумулировать значения по правилам: ищем ключи содержащие
+		// известные подстроки для upload/download и альтернативы (up/uplink/sent, down/recv/downlink).
 		var parsed interface{}
 		if err := json.Unmarshal(body, &parsed); err == nil {
-			// рекурсивный поиск числовых полей по подстроке ключа
-			var findNumber func(interface{}, string) (int64, bool)
-			findNumber = func(v interface{}, substr string) (int64, bool) {
+			stats := &XrayStats{}
+			var foundUpload, foundDownload, foundPing, foundConnections bool
+			var walk func(interface{})
+			walk = func(v interface{}) {
 				switch t := v.(type) {
 				case map[string]interface{}:
 					for k, val := range t {
-						if strings.Contains(strings.ToLower(k), substr) {
-							switch nv := val.(type) {
-							case float64:
-								return int64(nv), true
-							case string:
-								if n, err := strconv.ParseInt(nv, 10, 64); err == nil {
-									return n, true
+						lk := strings.ToLower(k)
+						// try extract numeric value
+						switch nv := val.(type) {
+						case float64:
+							// prefer exact/longer matches to avoid accidental substring matches
+							if !foundUpload && (strings.Contains(lk, "upload") || strings.Contains(lk, "uplink") || strings.Contains(lk, "sent")) {
+								stats.UploadBytes = int64(nv)
+								foundUpload = true
+							}
+							if !foundDownload && (strings.Contains(lk, "download") || strings.Contains(lk, "downlink") || strings.Contains(lk, "recv") || strings.Contains(lk, "received")) {
+								stats.DownloadBytes = int64(nv)
+								foundDownload = true
+							}
+							if !foundPing && strings.Contains(lk, "ping") {
+								stats.Ping = int(nv)
+								foundPing = true
+							}
+							if !foundConnections && (strings.Contains(lk, "connection") || strings.Contains(lk, "connections")) {
+								stats.ConnectionCount = int(nv)
+								foundConnections = true
+							}
+						case string:
+							// maybe numeric string
+							if n, err := strconv.ParseInt(nv, 10, 64); err == nil {
+								if !foundUpload && (strings.Contains(lk, "upload") || strings.Contains(lk, "uplink") || strings.Contains(lk, "sent")) {
+									stats.UploadBytes = n
+									foundUpload = true
+								}
+								if !foundDownload && (strings.Contains(lk, "download") || strings.Contains(lk, "downlink") || strings.Contains(lk, "recv") || strings.Contains(lk, "received")) {
+									stats.DownloadBytes = n
+									foundDownload = true
 								}
 							}
 						}
-						if res, ok := findNumber(val, substr); ok {
-							return res, true
-						}
+						// recurse into nested structures to find other keys
+						walk(val)
 					}
 				case []interface{}:
-					for _, item := range t {
-						if res, ok := findNumber(item, substr); ok {
-							return res, true
-						}
+					for _, it := range t {
+						walk(it)
 					}
 				}
-				return 0, false
 			}
+			walk(parsed)
 
-			stats := &XrayStats{}
-			if v, ok := findNumber(parsed, "upload"); ok {
-				stats.UploadBytes = v
-			}
-			if v, ok := findNumber(parsed, "download"); ok {
-				stats.DownloadBytes = v
-			}
-			// общие альтернативы
-			if stats.UploadBytes == 0 {
-				if v, ok := findNumber(parsed, "sent"); ok {
-					stats.UploadBytes = v
-				}
-			}
-			if stats.DownloadBytes == 0 {
-				if v, ok := findNumber(parsed, "recv"); ok {
-					stats.DownloadBytes = v
-				}
-			}
-			if v, ok := findNumber(parsed, "ping"); ok {
-				stats.Ping = int(v)
-			}
-			if v, ok := findNumber(parsed, "connection"); ok {
-				stats.ConnectionCount = int(v)
-			}
-			stats.LastUpdate = time.Now()
-			// Если нашли хотя бы что-то — вернём
-			if stats.UploadBytes != 0 || stats.DownloadBytes != 0 || stats.Ping != 0 || stats.ConnectionCount != 0 {
+			// If we found at least one metric, return it
+			if foundUpload || foundDownload || foundPing || foundConnections {
+				stats.LastUpdate = time.Now()
+				fmt.Printf("[getStats] parsed stats: upload=%d download=%d ping=%d connections=%d\n", stats.UploadBytes, stats.DownloadBytes, stats.Ping, stats.ConnectionCount)
 				return stats, nil
 			}
 		}
@@ -608,12 +692,15 @@ func (x *XrayManager) getStats() (*XrayStats, error) {
 		}
 	}
 
+	// Treat access.log size as total transferred bytes (best-effort): attribute to DownloadBytes
+	// (splitting equally often produces misleading identical values). Upload is unknown here.
 	stats := &XrayStats{
 		UploadBytes:     0,
 		DownloadBytes:   totalBytes,
 		Ping:            0,
 		ConnectionCount: len(ips),
 	}
+	fmt.Printf("[getStats] fallback to access.log: totalBytes=%d connections=%d\n", totalBytes, len(ips))
 
 	// попробуем измерить пинг быстрым TCP dial
 	start := time.Now()
@@ -626,6 +713,30 @@ func (x *XrayManager) getStats() (*XrayStats, error) {
 	return stats, nil
 }
 
+// EnableStats turns on or off the internal stats polling. When enabled and Xray is running,
+// a background goroutine will poll stats. When disabled, polling is stopped to save resources.
+func (x *XrayManager) EnableStats(enabled bool) {
+	if enabled == x.statsEnabled {
+		return
+	}
+	x.statsEnabled = enabled
+	if enabled {
+		// create context and start polling if process already running
+		if x.statsCtx == nil {
+			x.statsCtx, x.statsCancel = context.WithCancel(context.Background())
+		}
+		if x.isRunning {
+			go x.monitorStats(x.statsCtx)
+		}
+	} else {
+		if x.statsCancel != nil {
+			x.statsCancel()
+			x.statsCancel = nil
+			x.statsCtx = nil
+		}
+	}
+}
+
 // healthCheck проверяет работоспособность VPN
 func (x *XrayManager) healthCheck() {
 	time.Sleep(3 * time.Second)
@@ -634,6 +745,7 @@ func (x *XrayManager) healthCheck() {
 		isHealthy := x.checkProxyHealth()
 		if isHealthy {
 			fmt.Println("✅ Proxy health check passed")
+
 		} else {
 			fmt.Println("⚠️ Proxy health check failed")
 		}
@@ -643,7 +755,7 @@ func (x *XrayManager) healthCheck() {
 
 // checkProxyHealth проверяет что прокси работает
 func (x *XrayManager) checkProxyHealth() bool {
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:1080", 3*time.Second)
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", x.socksPort), 3*time.Second)
 	if err != nil {
 		return false
 	}
@@ -669,6 +781,13 @@ func (x *XrayManager) Stop() error {
 	if err := x.process.Signal(os.Interrupt); err != nil {
 		fmt.Printf("⚠️ Graceful shutdown failed, killing process: %v\n", err)
 		x.process.Kill()
+	}
+
+	// stop stats goroutine if running
+	if x.statsCancel != nil {
+		x.statsCancel()
+		x.statsCancel = nil
+		x.statsCtx = nil
 	}
 
 	x.isRunning = false

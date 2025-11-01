@@ -10,8 +10,7 @@ import (
 func main() {
 	app := app.NewWithID("com.vpn.client")
 
-	// Установка метаданных для macOS
-	app.SetIcon(loadIcon("assets/grey_icon.png"))
+	app.SetIcon(loadIcon("assets/tray_purple_icon.png"))
 
 	vpnApp := ui.NewVPNApp()
 	vpnApp.Run()
