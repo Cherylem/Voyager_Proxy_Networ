@@ -205,8 +205,9 @@ func (v *VPNApp) showAddConnectionDialog() {
 			if err != nil {
 				statusLabel.SetText("❌ " + err.Error())
 			} else {
-				statusText := fmt.Sprintf("✅ Сервер: %s:%d\n🔒 Безопасность: %s\n📡 Тип: %s",
-					conn.Server, conn.Port, conn.Security, conn.Type)
+				conn.Country, _ = services.GetCountryByIPAPI(conn.Server)
+				statusText := fmt.Sprintf("✅ Сервер: %s\n🔒 Безопасность: %s\n📡 Тип: %s",
+					conn.Country, conn.Security, conn.Type)
 				if conn.SNI != "" {
 					statusText += fmt.Sprintf("\n🌐 SNI: %s", conn.SNI)
 				}

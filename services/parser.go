@@ -92,11 +92,6 @@ func ParseVLESS(vlessURL string) (*models.Connection, error) {
 			}
 		}
 
-		country, err := GetCountryByIPAPI(serverAddr)
-		if err == nil && country != "" && country != "Unknown" {
-			conn.Country = country
-			// UI обновление можно выполнить через callback если потребуется
-		}
 	}()
 	// Извлекаем основные параметры
 	if security := params.Get("security"); security != "" {
