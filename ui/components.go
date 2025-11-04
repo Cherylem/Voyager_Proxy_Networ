@@ -198,7 +198,7 @@ func (c *Components) createComponents() {
 	})
 	c.showStatsCheck.SetChecked(false)
 
-	c.emptyLabel = widget.NewLabel("Нет сохраненных подключений\n\nДобавьте первое подключение через меню \"Файл\"")
+	c.emptyLabel = widget.NewLabel("Нет подключений\nДобавьте через меню \"Файл\"")
 	c.emptyLabel.Alignment = fyne.TextAlignCenter
 	c.emptyLabel.Wrapping = fyne.TextWrapWord
 

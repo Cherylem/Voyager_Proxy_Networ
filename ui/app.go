@@ -35,7 +35,7 @@ func (v *VPNApp) initialize() {
 	// ПЕРВОЕ: создаем окно
 	v.window = v.app.NewWindow("Voyager Proxy Network")
 	v.window.SetMaster()
-	v.window.Resize(fyne.NewSize(500, 650))
+	v.window.Resize(fyne.NewSize(600, 700))
 	v.window.CenterOnScreen()
 
 	// ВТОРОЕ: устанавливаем иконку окна

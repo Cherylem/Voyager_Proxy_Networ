@@ -16,24 +16,18 @@ move:
 
 	@# Копируем содержимое папки assets
 	@if [ -d "assets" ]; then \
-		cp -r assets/* $(APP_NAME).app/Contents/MacOS/assets/ 2>/dev/null || echo "⚠️ Some assets not copied"; \
+		cp -r assets/* $(APP_NAME).app/Contents/Resources/assets/ 2>/dev/null || echo "⚠️ Some assets not copied"; \
 		echo "✅ Copied assets"; \
 	else \
 		echo "⚠️ assets folder not found"; \
 	fi
 
-	@# Копируем содержимое папки configurations
-	@if [ -d "configurations" ]; then \
-		cp -r configurations/* $(APP_NAME).app/Contents/MacOS/configurations/ 2>/dev/null || echo "⚠️ Some configurations not copied"; \
-		echo "✅ Copied configurations"; \
-	fi
-
 directory:
 	@echo "📁 Creating app directory structure..."
 	@# Используем -p везде чтобы избежать ошибок если папки уже существуют
-	mkdir -p $(APP_NAME).app/Contents/MacOS/configurations
-	mkdir -p $(APP_NAME).app/Contents/Resources
-	mkdir -p $(APP_NAME).app/Contents/MacOS/assets
+	mkdir -p $(APP_NAME).app/Contents/Resources/configurations
+	mkdir -p $(APP_NAME).app/Contents/MacOS
+	mkdir -p $(APP_NAME).app/Contents/Resources/assets
 
 	@# Создаем config.json если его нет
 	@if [ ! -f "configurations/config.json" ]; then \
