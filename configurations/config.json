@@ -1,3 +1,32 @@
 {
-  "connections": []
+  "connections": [
+    {
+      "name": "test",
+      "server": "188.253.16.214",
+      "port": 26987,
+      "protocol": "vless",
+      "status": "disconnected",
+      "config": "vless://ca7a2024-df94-4a66-be81-3bf14401433d@188.253.16.214:26987?type=tcp\u0026security=reality\u0026fp=firefox\u0026pbk=VB-YWEJx5hFTg1fqQp7etOS7uJ-wi0BV7XLEwYIWchE\u0026sni=google.com\u0026flow=xtls-rprx-vision\u0026sid=9fc04589\u0026spx=%2F#testing-f7vdop10\n\n",
+      "country": "Unknown",
+      "uuid": "ca7a2024-df94-4a66-be81-3bf14401433d",
+      "security": "reality",
+      "type": "tcp",
+      "flow": "xtls-rprx-vision",
+      "sni": "google.com",
+      "fp": "firefox",
+      "pbk": "VB-YWEJx5hFTg1fqQp7etOS7uJ-wi0BV7XLEwYIWchE",
+      "sid": "9fc04589",
+      "spx": "/",
+      "params": {
+        "flow": "xtls-rprx-vision",
+        "fp": "firefox",
+        "pbk": "VB-YWEJx5hFTg1fqQp7etOS7uJ-wi0BV7XLEwYIWchE",
+        "security": "reality",
+        "sid": "9fc04589",
+        "sni": "google.com",
+        "spx": "/",
+        "type": "tcp"
+      }
+    }
+  ]
 }

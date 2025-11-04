@@ -198,9 +198,13 @@ func (c *Components) createComponents() {
 	})
 	c.showStatsCheck.SetChecked(false)
 
-	c.emptyLabel = widget.NewLabel("Нет подключений\nДобавьте через меню \"Файл\"")
-	c.emptyLabel.Alignment = fyne.TextAlignCenter
-	c.emptyLabel.Wrapping = fyne.TextWrapWord
+	c.emptyLabel = widget.NewLabelWithStyle(
+		"Нет подключений\nДобавьте через меню \"Файл\"",
+		fyne.TextAlignCenter,        // выравнивание по центру
+		fyne.TextStyle{Bold: false}, // стиль
+	)
+	//c.emptyLabel.Alignment = fyne.TextAlignCenter
+	//c.emptyLabel.Wrapping = fyne.TextWrapWord
 
 	// Переключатель темы
 	c.themeSwitch = widget.NewButton("🌙", c.toggleTheme)
@@ -396,29 +400,35 @@ func (c *Components) GetMainContent() fyne.CanvasObject {
 	connectionsTitle := widget.NewLabel("Доступные подключения")
 	connectionsTitle.TextStyle = fyne.TextStyle{Bold: true}
 
-	var listContent fyne.CanvasObject
+	// ФИКС: Когда подключений нет - не показываем список вообще, показываем только сообщение
+	var content fyne.CanvasObject
 	if len(c.connections) == 0 {
-		listContent = container.NewCenter(c.emptyLabel)
+		// Показываем только сообщение о пустом списке
+		content = container.NewCenter(c.emptyLabel)
 	} else {
-		listContent = container.NewStack(
-			container.NewPadded(c.connectionsList),
+		// Показываем заголовок и список подключений
+		content = container.NewBorder(
+			container.NewVBox(
+				container.NewPadded(connectionsTitle),
+				widget.NewSeparator(),
+			),
+			nil, nil, nil,
+			container.NewStack(container.NewPadded(c.connectionsList)),
 		)
 	}
 
 	mainContent := container.NewBorder(
 		container.NewVBox(
-			container.NewPadded(header), // Новый header с переключателем
+			container.NewPadded(header),
 			layout.NewSpacer(),
 			container.NewPadded(statusCard),
 			layout.NewSpacer(),
-			widget.NewSeparator(),
-			container.NewPadded(connectionsTitle),
 			widget.NewSeparator(),
 		),
 		nil,
 		nil,
 		nil,
-		listContent,
+		content,
 	)
 
 	return container.NewPadded(mainContent)

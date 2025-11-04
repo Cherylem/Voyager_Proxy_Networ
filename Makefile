@@ -30,10 +30,8 @@ directory:
 	mkdir -p $(APP_NAME).app/Contents/Resources/assets
 
 	@# Создаем config.json если его нет
-	@if [ ! -f "configurations/config.json" ]; then \
-		touch $(APP_NAME).app/Contents/MacOS/configurations/config.json; \
-		echo "📄 Created empty config.json"; \
-	fi
+	touch $(APP_NAME).app/Contents/Resources/configurations/config.json; \
+	echo "📄 Created empty config.json"; \
 
 make_icon:
 	@echo "🎨 Creating app icon..."
@@ -93,7 +91,7 @@ create-dmg: app
 	@rm -rf $(APP_NAME).dmg dmg_temp
 	@mkdir -p dmg_temp
 	cp -r $(APP_NAME).app dmg_temp/
-	cp Install.command dmg_temp/
+	cp package_for_dmg/Install.command dmg_temp/
 	ln -s /Applications dmg_temp/
 	hdiutil create -volname "$(APP_NAME)" -srcfolder dmg_temp -ov -format UDZO "$(APP_NAME).dmg"
 	rm -rf dmg_temp

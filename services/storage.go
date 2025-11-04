@@ -4,20 +4,38 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"vpn-client/models"
 )
 
-const configFile = "configurations/config.json"
+func getConfigFilePath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	configDir := filepath.Join(homeDir, "Library", "Application Support", "VoyagerProxyNetwork")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configDir, "config.json"), nil
+}
 
 type AppConfig struct {
 	Connections []models.Connection `json:"connections"`
 }
 
 func LoadConfig() (*AppConfig, error) {
+	configFile, err := getConfigFilePath()
+	if err != nil {
+		return nil, err
+	}
+
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Файл не существует, возвращаем пустую конфигурацию
+			// Файл не существует, создаём пустую конфигурацию
 			return &AppConfig{Connections: []models.Connection{}}, nil
 		}
 		return nil, err
@@ -29,6 +47,11 @@ func LoadConfig() (*AppConfig, error) {
 }
 
 func SaveConfig(config *AppConfig) error {
+	configFile, err := getConfigFilePath()
+	if err != nil {
+		return err
+	}
+
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
