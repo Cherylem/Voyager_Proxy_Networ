@@ -92,6 +92,7 @@ func ParseVLESS(vlessURL string) (*models.Connection, error) {
 			}
 		}
 
+
 	}()
 	// Извлекаем основные параметры
 	if security := params.Get("security"); security != "" {
@@ -125,6 +126,7 @@ func ParseVLESS(vlessURL string) (*models.Connection, error) {
 			conn.Params[key] = values[0]
 		}
 	}
+	conn.Country, _ = GetCountryByIPAPI(conn.Server)
 
 	// Если имя не указано в ссылке, генерируем его
 	if conn.Name == "" {
