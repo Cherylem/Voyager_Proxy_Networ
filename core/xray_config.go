@@ -99,7 +99,7 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 			Services: []string{"StatsService", "HandlerService"},
 		},
 		Inbounds: []Inbound{
-				{
+			{
 				Tag:      "socks-in",
 				Port:     x.socksPort,
 				Listen:   "127.0.0.1",
@@ -114,7 +114,7 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 					DestOverride: []string{"http", "tls", "quic"},
 				},
 			},
-				{
+			{
 				Tag:      "http-in",
 				Port:     x.httpPort,
 				Listen:   "127.0.0.1",
@@ -131,7 +131,6 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 			},
 		},
 		Outbounds: func() []Outbound {
-			// Build proxy outbound and only attach StreamSettings for Reality when we have required fields.
 			proxySettings := json.RawMessage(fmt.Sprintf(`{
 					"vnext": [{
 						"address": "%s",
@@ -151,9 +150,7 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 				Settings: proxySettings,
 			}
 
-			// Only enable Reality streamSettings when it's explicitly requested or we have necessary params
 			if conn.Security == "reality" || (conn.PBK != "" && conn.SID != "") {
-				// If critical Reality fields are missing, log a warning but avoid producing invalid config
 				proxyOutbound.StreamSettings = &StreamSettings{
 					Network:  "tcp",
 					Security: "reality",
@@ -169,7 +166,6 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 					},
 				}
 			} else {
-				// Default to plain TCP without additional security
 				proxyOutbound.StreamSettings = &StreamSettings{
 					Network:  "tcp",
 					Security: "none",

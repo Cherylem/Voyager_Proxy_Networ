@@ -32,19 +32,19 @@ func NewVPNApp() *VPNApp {
 func (v *VPNApp) initialize() {
 	v.app = app.NewWithID("com.vpn.client")
 
-	// ПЕРВОЕ: создаем окно
+	// создаем окно
 	v.window = v.app.NewWindow("Voyager Proxy Network")
 	v.window.SetMaster()
 	v.window.Resize(fyne.NewSize(600, 700))
 	v.window.CenterOnScreen()
 
-	// ВТОРОЕ: устанавливаем иконку окна
+	// устанавливаем иконку окна
 	v.setWindowIcon()
 
-	// ТРЕТЬЕ: применяем тему (после создания окна)
+	// применяем тему (после создания окна)
 	v.applyTheme()
 
-	// ВАЖНО: При закрытии крестиком - скрываем окно
+	// При закрытии крестиком - скрываем окно
 	v.window.SetCloseIntercept(func() {
 		fmt.Println("Close button clicked - hiding window")
 		v.hideWindow()
@@ -59,7 +59,7 @@ func (v *VPNApp) initialize() {
 	})
 	v.components.SetOnThemeChangeCallback(v.onThemeChanged)
 
-	// ЧЕТВЕРТОЕ: создаем tray менеджер (передаем vpnApp)
+	// создаем tray менеджер (передаем vpnApp)
 	v.tray = NewTrayManager(v.app, v.window, v.components, v)
 
 	v.createAppMenu()
@@ -78,7 +78,7 @@ func (v *VPNApp) setWindowIcon() {
 		// Создаем простую иконку как fallback
 		fallbackIcon := &fyne.StaticResource{
 			StaticName:    "64X64.png",
-			StaticContent: []byte{}, // Можно добавить простую PNG иконку в base64
+			StaticContent: []byte{},
 		}
 		v.window.SetIcon(fallbackIcon)
 		return
@@ -121,7 +121,7 @@ func (v *VPNApp) onThemeChanged(isDark bool) {
 	v.window.SetContent(v.components.GetMainContent())
 }
 
-// ИСПРАВЛЕННЫЙ МЕТОД: Скрываем окно вместо закрытия
+// Скрываем окно вместо закрытия
 func (v *VPNApp) hideWindow() {
 	v.window.Hide()
 }
@@ -143,7 +143,7 @@ func (v *VPNApp) createAppMenu() {
 	v.window.SetMainMenu(mainMenu)
 }
 
-// Метод для показа окна (будет вызываться из трея и Dock)
+// Метод для показа окна
 func (v *VPNApp) showWindow() {
 	v.window.Show()
 	v.window.RequestFocus() // Фокусируем окно
@@ -217,9 +217,6 @@ func (v *VPNApp) showAddConnectionDialog() {
 			statusLabel.SetText("")
 		}
 	}
-
-	//cancelButton := buttons.Objects[0].(*widget.Button)
-	//addButton := buttons.Objects[1].(*widget.Button)
 
 	cancelButton.OnTapped = func() { dialog.Hide() }
 	addButton.OnTapped = func() {

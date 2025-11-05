@@ -777,13 +777,11 @@ func (x *XrayManager) Stop() error {
 	// Очищаем системный прокси
 	x.ClearSystemProxy()
 
-	// Graceful shutdown
 	if err := x.process.Signal(os.Interrupt); err != nil {
 		fmt.Printf("⚠️ Graceful shutdown failed, killing process: %v\n", err)
 		x.process.Kill()
 	}
 
-	// stop stats goroutine if running
 	if x.statsCancel != nil {
 		x.statsCancel()
 		x.statsCancel = nil
@@ -801,14 +799,12 @@ func (x *XrayManager) Stop() error {
 	return nil
 }
 
-// GetStats возвращает текущую статистику
 func (x *XrayManager) GetStats() *XrayStats {
 	x.statsMu.RLock()
 	defer x.statsMu.RUnlock()
 	if x.stats == nil {
 		return &XrayStats{}
 	}
-	// return a copy to avoid races
 	copy := *x.stats
 	return &copy
 }

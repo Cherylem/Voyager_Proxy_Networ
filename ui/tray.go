@@ -33,9 +33,9 @@ func (tm *TrayManager) SetVPNApp(vpnApp *VPNApp) {
 
 func (tm *TrayManager) showWindow() {
 	if tm.vpnApp != nil {
-		tm.vpnApp.showWindow() // Используем метод из VPNApp
+		tm.vpnApp.showWindow()
 	} else {
-		tm.window.Show() // Фолбэк
+		tm.window.Show()
 	}
 }
 
@@ -58,7 +58,7 @@ func (tm *TrayManager) createTrayMenu() {
 
 	if desk, ok := tm.app.(desktop.App); ok {
 		// Устанавливаем иконку трея
-		tm.setTrayIcon(false) // начальное состояние - отключено
+		tm.setTrayIcon(false)
 
 		desk.SetSystemTrayMenu(tm.menu)
 	}
@@ -104,7 +104,6 @@ func (tm *TrayManager) UpdateMenu() {
 		quitItem,
 	}
 
-	// Обновляем иконку трея при изменении статуса
 	tm.setTrayIcon(isConnected)
 
 	if desk, ok := tm.app.(desktop.App); ok {

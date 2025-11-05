@@ -65,7 +65,6 @@ func AddConnection(conn models.Connection) error {
 	if err != nil {
 		return err
 	}
-
 	// Проверка на дубликаты
 	for _, existingConn := range config.Connections {
 		if existingConn.Config == conn.Config {

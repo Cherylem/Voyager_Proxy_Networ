@@ -21,14 +21,12 @@ type ImageButton struct {
 	mu    sync.RWMutex
 }
 
-// compile-time interface assertions
 var _ desktop.Hoverable = (*ImageButton)(nil)
 
 func NewImageButton(res fyne.Resource, onTap func()) *ImageButton {
 	ib := &ImageButton{res: res, onTap: onTap}
 	if res != nil {
 		ib.img = canvas.NewImageFromResource(res)
-		// use contain so image scales to available area
 		ib.img.FillMode = canvas.ImageFillContain
 	} else {
 		ib.img = canvas.NewImageFromResource(nil)
@@ -41,7 +39,6 @@ func (b *ImageButton) CreateRenderer() fyne.WidgetRenderer {
 	return &imageButtonRenderer{img: b.img, obj: b}
 }
 
-// SetResource updates the displayed image resource and refreshes.
 func (b *ImageButton) SetResource(res fyne.Resource) {
 	b.res = res
 	if b.img == nil {
@@ -53,7 +50,6 @@ func (b *ImageButton) SetResource(res fyne.Resource) {
 	b.Refresh()
 }
 
-// SetSize sets a preferred size for the image button (used by renderer layout).
 func (b *ImageButton) SetSize(s fyne.Size) {
 	b.size = s
 	b.Refresh()
@@ -67,7 +63,6 @@ func (b *ImageButton) Tapped(_ *fyne.PointEvent) {
 
 func (b *ImageButton) TappedSecondary(_ *fyne.PointEvent) {}
 
-// Hover events (desktop)
 func (b *ImageButton) MouseIn(*desktop.MouseEvent) {
 	b.mu.Lock()
 	b.hover = true
@@ -97,8 +92,6 @@ func (r *imageButtonRenderer) Layout(size fyne.Size) {
 	pref := r.obj.size
 	r.obj.mu.RUnlock()
 
-	// scale on hover
-	// keep image slightly smaller than widget when not hovered, and grow to full size on hover
 	scale := 0.85
 	if hover {
 		scale = 1.0
@@ -109,7 +102,6 @@ func (r *imageButtonRenderer) Layout(size fyne.Size) {
 		w = float32(pref.Width) * float32(scale)
 		h = float32(pref.Height) * float32(scale)
 	} else {
-		// if no pref size, just resize relative to allocated size
 		w = float32(size.Width) * float32(scale)
 		h = float32(size.Height) * float32(scale)
 	}
@@ -125,7 +117,6 @@ func (r *imageButtonRenderer) MinSize() fyne.Size {
 }
 
 func (r *imageButtonRenderer) Refresh() {
-	// Recompute image size/position on refresh (so hover changes take effect immediately)
 	r.obj.mu.RLock()
 	hover := r.obj.hover
 	pref := r.obj.size
@@ -156,7 +147,3 @@ func (r *imageButtonRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *imageButtonRenderer) Destroy() {}
-
-func float32ToInt(v float32) int {
-	return int(v + 0.5)
-}

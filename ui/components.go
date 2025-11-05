@@ -173,23 +173,19 @@ func (c *Components) createComponents() {
 		startIcon = connectIcon
 	}
 
-	// Создаем кликабельное изображение-кнопку (даже если иконки нет - создаем пустой)
+	// Создаем кликабельное изображение-кнопку
 	c.connectButton = NewImageButton(startIcon, c.toggleConnection)
-	// Поставим удобный размер по умолчанию — можно изменить позднее
 	c.connectButton.SetSize(fyne.NewSize(96, 96))
-	// Устанавливаем корректную иконку состояния (по умолчанию отключено)
 	c.updateConnectIcon(false)
 
 	// Чекбокс для включения/выключения отображения статистики
 	c.showStats = false
 	c.showStatsCheck = widget.NewCheck("Показывать статистику(в разработке)", func(checked bool) {
 		c.showStats = checked
-		// tell vpn manager to enable/disable stats collection to save resources
 		if c.vpnManager != nil {
 			c.vpnManager.EnableStats(checked)
 		}
 		if !checked {
-			// очистим предыдущие значения и UI
 			c.prevStats = nil
 			fyne.Do(func() {
 				c.statusLabel.SetText("Статистика отключена")
@@ -203,9 +199,6 @@ func (c *Components) createComponents() {
 		fyne.TextAlignCenter,        // выравнивание по центру
 		fyne.TextStyle{Bold: false}, // стиль
 	)
-	//c.emptyLabel.Alignment = fyne.TextAlignCenter
-	//c.emptyLabel.Wrapping = fyne.TextWrapWord
-
 	// Переключатель темы
 	c.themeSwitch = widget.NewButton("🌙", c.toggleTheme)
 	c.themeSwitch.Resize(fyne.NewSize(50, 80))
@@ -298,7 +291,6 @@ func (c *Components) updateConnectIcon(connected bool) {
 		if connectIcon != nil {
 			c.connectButton.SetResource(connectIcon)
 		} else {
-			// если нет стартовой иконки, очистим изображение
 			c.connectButton.SetResource(nil)
 		}
 	}
@@ -322,7 +314,6 @@ func (c *Components) deleteConnection(index int) {
 		c.isConnected = false
 		c.updateConnectIcon(false)
 		c.statusLabel.SetText("Готов к подключению")
-		// nothing to change for ImageButton importance
 	}
 
 	config := &services.AppConfig{Connections: c.connections}
@@ -369,12 +360,11 @@ func (c *Components) toggleConnection() {
 		if c.statsTimer != nil {
 			c.statsTimer.Stop()
 		}
-		// Обновим UI немедленно после остановки
 		c.updateStats()
 	}
 	c.connectionsList.Refresh()
 	if c.onUpdate != nil {
-		c.onUpdate() // это уже должно обновлять трей
+		c.onUpdate()
 	}
 }
 
@@ -400,13 +390,11 @@ func (c *Components) GetMainContent() fyne.CanvasObject {
 	connectionsTitle := widget.NewLabel("Доступные подключения")
 	connectionsTitle.TextStyle = fyne.TextStyle{Bold: true}
 
-	// ФИКС: Когда подключений нет - не показываем список вообще, показываем только сообщение
+	//Когда подключений нет - не показываем список вообще, показываем только сообщение
 	var content fyne.CanvasObject
 	if len(c.connections) == 0 {
-		// Показываем только сообщение о пустом списке
 		content = container.NewCenter(c.emptyLabel)
 	} else {
-		// Показываем заголовок и список подключений
 		content = container.NewBorder(
 			container.NewVBox(
 				container.NewPadded(connectionsTitle),
