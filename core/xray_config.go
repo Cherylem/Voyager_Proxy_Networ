@@ -3,8 +3,10 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"vpn-client/models"
 )
 
@@ -86,6 +88,13 @@ type RoutingRule struct {
 
 // GenerateConfig создает конфиг Xray для подключения
 func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
+	// Сначала вычислим путь куда будет записан config.json — whitelist будет искаться рядом с ним
+	configDir := filepath.Join(x.getXrayDir(), "config")
+
+	// Загружаем whitelist домены (если есть) из той же директории, где будет config.json
+	whitelistPath := filepath.Join(configDir, "whitelist.json")
+	whitelist := x.loadWhitelistDomains(whitelistPath)
+
 	fmt.Printf("🔧 Debug Connection: Server=%s, Port=%d, UUID=%s, Flow=%s, FP=%s, SNI=%s, PBK=%s, SID=%s\n",
 		conn.Server, conn.Port, conn.UUID, conn.Flow, conn.FP, conn.SNI, conn.PBK, conn.SID)
 
@@ -195,12 +204,13 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 		}(),
 		Routing: RoutingConfig{
 			DomainStrategy: "IPIfNonMatch",
-			Rules: []RoutingRule{
-				{
-					Type:        "field",
-					OutboundTag: "direct",
-					Domain:      []string{"geosite:cn"},
-				},
+			Rules: func() []RoutingRule {
+				base := []RoutingRule{
+					{
+						Type:        "field",
+						OutboundTag: "direct",
+						Domain:      []string{"geosite:cn"},
+					},
 				{
 					Type:        "field",
 					OutboundTag: "direct",
@@ -236,12 +246,24 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 					OutboundTag: "proxy",
 					IP:          []string{"0.0.0.0/0", "::/0"},
 				},
-			},
+				}
+
+				// If whitelist present - prepend it so these domains go DIRECT (bypass VPN)
+				if len(whitelist) > 0 {
+					wlRule := RoutingRule{
+						Type:        "field",
+						OutboundTag: "direct",
+						Domain:      whitelist,
+					}
+					// place whitelist at the top
+					base = append([]RoutingRule{wlRule}, base...)
+				}
+				return base
+			}(),
 		},
 	}
 
 	// Сохраняем конфиг в файл
-	configDir := filepath.Join(x.getXrayDir(), "config")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", err
 	}
@@ -261,5 +283,80 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 
 	fmt.Printf("✅ Xray config generated with DNS/WebRTC leak protection: %s\n", configPath)
 	return configPath, nil
+}
+
+// loadWhitelistDomains читает `configurations/whitelist.json`, нормализует записи
+// и возвращает список доменов в формате, ожидаемом Xray (например, "domain:example.com").
+// loadWhitelistDomains читает указанный файл `whitelist.json`, нормализует записи
+// и возвращает список доменов в формате, ожидаемом Xray (например, "domain:example.com").
+// Путь должен указывать на файл рядом с `config.json`.
+func (x *XrayManager) loadWhitelistDomains(preferredPath string) []string {
+	// Try in order: preferredPath (usually configDir/whitelist.json),
+	// then binary-relative `configurations/whitelist.json`, then repo/workdir `configurations/whitelist.json`.
+	candidates := []string{}
+	if preferredPath != "" {
+		candidates = append(candidates, preferredPath)
+	}
+	// binary-relative: dirname(os.Args[0]) + /configurations/whitelist.json
+	binDir := filepath.Dir(os.Args[0])
+	candidates = append(candidates, filepath.Join(binDir, "configurations", "whitelist.json"))
+	// working directory / repository path
+	candidates = append(candidates, "configurations/whitelist.json")
+
+	var found string
+	for _, p := range candidates {
+		if p == "" {
+			continue
+		}
+		if _, err := os.Stat(p); err == nil {
+			found = p
+			break
+		}
+	}
+	if found == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(found)
+	if err != nil {
+		return nil
+	}
+
+	var raw []string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+
+	out := make([]string, 0, len(raw))
+	seen := make(map[string]bool)
+	for _, entry := range raw {
+		s := strings.TrimSpace(entry)
+		if s == "" {
+			continue
+		}
+		// Попробуем распарсить как URL
+		if u, err := url.Parse(s); err == nil && u.Host != "" {
+			s = u.Host
+		} else {
+			// убираем схему, слеши и префиксы вручную
+			s = strings.TrimPrefix(s, "https://")
+			s = strings.TrimPrefix(s, "http://")
+			s = strings.TrimSuffix(s, "/")
+		}
+		// Обрезаем порт, если есть
+		if idx := strings.Index(s, ":"); idx != -1 {
+			s = s[:idx]
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		dom := "domain:" + s
+		if !seen[dom] {
+			seen[dom] = true
+			out = append(out, dom)
+		}
+	}
+	return out
 }
 
