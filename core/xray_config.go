@@ -248,14 +248,14 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 				},
 				}
 
-				// If whitelist present - prepend it so these domains go DIRECT (bypass VPN)
+
 				if len(whitelist) > 0 {
 					wlRule := RoutingRule{
 						Type:        "field",
 						OutboundTag: "direct",
 						Domain:      whitelist,
 					}
-					// place whitelist at the top
+
 					base = append([]RoutingRule{wlRule}, base...)
 				}
 				return base
@@ -285,22 +285,17 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 	return configPath, nil
 }
 
-// loadWhitelistDomains читает `configurations/whitelist.json`, нормализует записи
-// и возвращает список доменов в формате, ожидаемом Xray (например, "domain:example.com").
-// loadWhitelistDomains читает указанный файл `whitelist.json`, нормализует записи
-// и возвращает список доменов в формате, ожидаемом Xray (например, "domain:example.com").
-// Путь должен указывать на файл рядом с `config.json`.
+
 func (x *XrayManager) loadWhitelistDomains(preferredPath string) []string {
-	// Try in order: preferredPath (usually configDir/whitelist.json),
-	// then binary-relative `configurations/whitelist.json`, then repo/workdir `configurations/whitelist.json`.
+
 	candidates := []string{}
 	if preferredPath != "" {
 		candidates = append(candidates, preferredPath)
 	}
-	// binary-relative: dirname(os.Args[0]) + /configurations/whitelist.json
+
 	binDir := filepath.Dir(os.Args[0])
 	candidates = append(candidates, filepath.Join(binDir, "configurations", "whitelist.json"))
-	// working directory / repository path
+
 	candidates = append(candidates, "configurations/whitelist.json")
 
 	var found string
