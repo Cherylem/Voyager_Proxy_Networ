@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -373,8 +374,19 @@ func (c *Components) GetMainContent() fyne.CanvasObject {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.Alignment = fyne.TextAlignCenter
 
-	// Верхняя панель с заголовком и переключателем темы
+	// Кнопка для управления whitelist
+	whitelistBtn := widget.NewButton("✅ Whitelist", func() {
+		c.showWhitelistDialog()
+	})
+
+	// Левая часть с кнопками
+	leftButtons := container.NewVBox(
+		whitelistBtn,
+	)
+
+	// Верхняя панель с кнопками слева, заголовком в центре и переключателем темы справа
 	header := container.NewHBox(
+		leftButtons,
 		layout.NewSpacer(),
 		title,
 		layout.NewSpacer(),
@@ -475,4 +487,125 @@ func (c *Components) GetSelectedConnection() *models.Connection {
 		return nil
 	}
 	return &c.connections[c.selectedIndex]
+}
+
+// showWhitelistDialog показывает окно для управления whitelist сайтов
+func (c *Components) showWhitelistDialog() {
+	app := fyne.CurrentApp()
+	whitelistWindow := app.NewWindow("Whitelist сайтов")
+	whitelistWindow.Resize(fyne.NewSize(600, 500))
+
+	// Загружаем whitelist
+	whitelist := c.loadWhitelist()
+
+	// Переменная для ссылки на список (нужна для обновления в callback)
+	var whitelistList *widget.List
+
+	// Создаем список сайтов
+	whitelistList = widget.NewList(
+		func() int { return len(whitelist) },
+		func() fyne.CanvasObject {
+			return container.NewHBox(
+				widget.NewLabel(""),
+				layout.NewSpacer(),
+				widget.NewButton("🗑️", nil),
+			)
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			cont := o.(*fyne.Container)
+			urlLabel := cont.Objects[0].(*widget.Label)
+			deleteBtn := cont.Objects[2].(*widget.Button)
+
+			urlLabel.SetText(whitelist[i])
+
+			deleteBtn.OnTapped = func() {
+				whitelist = append(whitelist[:i], whitelist[i+1:]...)
+				whitelistList.Refresh()
+			}
+		},
+	)
+
+	// Поле для добавления новой записи
+	newUrlEntry := widget.NewEntry()
+	newUrlEntry.SetPlaceHolder("https://example.com")
+
+	// Кнопка добавления
+	addBtn := widget.NewButton("➕ Добавить сайт", func() {
+		if newUrlEntry.Text == "" {
+			fmt.Println("❌ URL не может быть пустым")
+			return
+		}
+
+		whitelist = append(whitelist, newUrlEntry.Text)
+		whitelistList.Refresh()
+		newUrlEntry.SetText("")
+	})
+
+	// Кнопки сохранения и отмены
+	saveBtn := widget.NewButton("💾 Сохранить", func() {
+		c.saveWhitelist(whitelist)
+		fmt.Println("✅ Whitelist сохранен")
+		whitelistWindow.Close()
+	})
+
+	cancelBtn := widget.NewButton("Отмена", func() {
+		whitelistWindow.Close()
+	})
+
+	// Информационный текст
+	infoLabel := widget.NewLabelWithStyle(
+		"Добавьте сайты, которые будут открываться напрямую (без VPN).\nВсе остальные сайты будут использовать VPN.",
+		fyne.TextAlignCenter,
+		fyne.TextStyle{Italic: true},
+	)
+
+	buttons := container.NewHBox(
+		layout.NewSpacer(),
+		saveBtn,
+		cancelBtn,
+	)
+
+	addSection := container.NewVBox(
+		newUrlEntry,
+		addBtn,
+	)
+
+	content := container.NewVBox(
+		infoLabel,
+		widget.NewSeparator(),
+		addSection,
+		widget.NewSeparator(),
+		container.NewBorder(
+			widget.NewLabel("Сайты в списке:"),
+			nil, nil, nil,
+			whitelistList,
+		),
+		buttons,
+	)
+
+	whitelistWindow.SetContent(container.NewPadded(content))
+	whitelistWindow.Show()
+}
+
+// loadWhitelist загружает список whitelist сайтов
+func (c *Components) loadWhitelist() []string {
+	configPath := "configurations/whitelist.json"
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return []string{}
+	}
+
+	var whitelist []string
+	err = json.Unmarshal(data, &whitelist)
+	if err != nil {
+		return []string{}
+	}
+
+	return whitelist
+}
+
+// saveWhitelist сохраняет список whitelist сайтов
+func (c *Components) saveWhitelist(whitelist []string) {
+	data, _ := json.MarshalIndent(whitelist, "", "  ")
+	os.WriteFile("configurations/whitelist.json", data, 0644)
 }

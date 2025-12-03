@@ -262,4 +262,3 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 	fmt.Printf("✅ Xray config generated with DNS/WebRTC leak protection: %s\n", configPath)
 	return configPath, nil
 }
-

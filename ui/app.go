@@ -136,7 +136,7 @@ func (v *VPNApp) createAppMenu() {
 
 	connectionsMenu := fyne.NewMenu("Подключения",
 		fyne.NewMenuItem("Копировать ссылку", v.copyConnectionLink),
-		fyne.NewMenuItem("Импорт настроек", v.importConfig),
+		fyne.NewMenuItem("Импорт конфигурации", v.showAddConnectionDialog),
 	)
 
 	mainMenu := fyne.NewMainMenu(fileMenu, connectionsMenu)
@@ -253,10 +253,6 @@ func (v *VPNApp) copyConnectionLink() {
 	} else {
 		v.app.SendNotification(fyne.NewNotification("Ошибка", "Нет ссылки для копирования"))
 	}
-}
-
-func (v *VPNApp) importConfig() {
-	v.app.SendNotification(fyne.NewNotification("Инфо", "Функция импорта в разработке"))
 }
 
 func (v *VPNApp) Run() {
