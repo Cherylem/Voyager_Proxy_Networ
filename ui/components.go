@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -618,6 +619,67 @@ func (c *Components) loadWhitelist() []string {
 
 // saveWhitelist сохраняет список whitelist сайтов
 func (c *Components) saveWhitelist(whitelist []string) {
-	data, _ := json.MarshalIndent(whitelist, "", "  ")
+	expanded := expandWhitelistEntries(whitelist)
+	data, _ := json.MarshalIndent(expanded, "", "  ")
 	os.WriteFile("configurations/whitelist.json", data, 0644)
+}
+
+// expandWhitelistEntries принимает список пользовательских записей (хосты или URL)
+// и возвращает развернутый, уникальный список вариантов для записи в JSON.
+// Для каждого хоста добавляются варианты: `host`, `*.host`, `baseDomain`, `*.baseDomain`.
+func expandWhitelistEntries(raw []string) []string {
+	out := make([]string, 0, len(raw)*4)
+	seen := make(map[string]bool)
+
+	for _, entry := range raw {
+		s := strings.TrimSpace(entry)
+		if s == "" {
+			continue
+		}
+
+		// Попробуем распарсить как URL
+		if u, err := url.Parse(s); err == nil && u.Host != "" {
+			s = u.Host
+		} else {
+			s = strings.TrimPrefix(s, "https://")
+			s = strings.TrimPrefix(s, "http://")
+			s = strings.TrimSuffix(s, "/")
+		}
+
+		// Обрезаем порт, если есть
+		if idx := strings.Index(s, ":"); idx != -1 {
+			s = s[:idx]
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+
+		add := func(val string) {
+			if val == "" {
+				return
+			}
+			if !seen[val] {
+				seen[val] = true
+				out = append(out, val)
+			}
+		}
+
+		// основной домен
+		add(s)
+
+		// wildcard для поддоменов
+		add("*." + s)
+
+		// базовый домен (всё после первой точки)
+		if idx := strings.Index(s, "."); idx != -1 {
+			base := s[idx+1:]
+			if base != "" {
+				add(base)
+				add("*." + base)
+			}
+		}
+	}
+
+	return out
 }

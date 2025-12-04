@@ -320,7 +320,7 @@ func (x *XrayManager) loadWhitelistDomains(preferredPath string) []string {
 		return nil
 	}
 
-	out := make([]string, 0, len(raw))
+	out := make([]string, 0, len(raw)*3) // Может быть до 3 вариантов на запись
 	seen := make(map[string]bool)
 	for _, entry := range raw {
 		s := strings.TrimSpace(entry)
@@ -344,10 +344,37 @@ func (x *XrayManager) loadWhitelistDomains(preferredPath string) []string {
 		if s == "" {
 			continue
 		}
+
+		// Добавляем основной домен
 		dom := "domain:" + s
 		if !seen[dom] {
 			seen[dom] = true
 			out = append(out, dom)
+		}
+
+		// Добавляем wildcard для подменов (*.domain)
+		wildcard := "domain:*." + s
+		if !seen[wildcard] {
+			seen[wildcard] = true
+			out = append(out, wildcard)
+		}
+
+		// Добавляем базовый домен (если есть точки)
+		if idx := strings.Index(s, "."); idx != -1 {
+			baseDomain := s[idx+1:] // Всё после первой точки
+			if baseDomain != "" {
+				base := "domain:" + baseDomain
+				if !seen[base] {
+					seen[base] = true
+					out = append(out, base)
+				}
+				// Также добавляем wildcard для базового домена
+				baseWildcard := "domain:*." + baseDomain
+				if !seen[baseWildcard] {
+					seen[baseWildcard] = true
+					out = append(out, baseWildcard)
+				}
+			}
 		}
 	}
 	return out
