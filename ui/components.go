@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"golang.org/x/net/publicsuffix"
 	"vpn-client/core"
 	"vpn-client/models"
 	"vpn-client/services"
@@ -671,12 +672,13 @@ func expandWhitelistEntries(raw []string) []string {
 		// wildcard для поддоменов
 		add("*." + s)
 
-		// базовый домен (всё после первой точки)
-		if idx := strings.Index(s, "."); idx != -1 {
-			base := s[idx+1:]
-			if base != "" {
-				add(base)
-				add("*." + base)
+		// базовый домен: используем publicsuffix.EffectiveTLDPlusOne чтобы получить
+		// registrable domain (eTLD+1). Это предотвращает добавление одиночных TLD
+		// (например, "ru") в качестве правила.
+		if etld1, err := publicsuffix.EffectiveTLDPlusOne(s); err == nil {
+			if etld1 != s {
+				add(etld1)
+				add("*." + etld1)
 			}
 		}
 	}

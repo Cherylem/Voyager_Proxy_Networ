@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"golang.org/x/net/publicsuffix"
 	"os"
 	"path/filepath"
 	"strings"
@@ -359,17 +360,17 @@ func (x *XrayManager) loadWhitelistDomains(preferredPath string) []string {
 			out = append(out, wildcard)
 		}
 
-		// Добавляем базовый домен (если есть точки)
-		if idx := strings.Index(s, "."); idx != -1 {
-			baseDomain := s[idx+1:] // Всё после первой точки
-			if baseDomain != "" {
-				base := "domain:" + baseDomain
+		// Добавляем базовый домен (eTLD+1) используя publicsuffix — это предотвращает
+		// добавление одиночных TLD вроде "ru" в качестве правила.
+		if etld1, err := publicsuffix.EffectiveTLDPlusOne(s); err == nil {
+			if etld1 != s {
+				base := "domain:" + etld1
 				if !seen[base] {
 					seen[base] = true
 					out = append(out, base)
 				}
-				// Также добавляем wildcard для базового домена
-				baseWildcard := "domain:*." + baseDomain
+				// wildcard для базового домена
+				baseWildcard := "domain:*." + etld1
 				if !seen[baseWildcard] {
 					seen[baseWildcard] = true
 					out = append(out, baseWildcard)
