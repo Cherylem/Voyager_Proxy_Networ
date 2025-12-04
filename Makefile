@@ -32,6 +32,8 @@ directory:
 	@# Создаем config.json если его нет
 	touch $(APP_NAME).app/Contents/Resources/configurations/config.json; \
 	echo "📄 Created empty config.json"; \
+	touch $(APP_NAME).app/Contents/Resources/configurations/whitelist.json; \
+    echo "📄 Created empty whitelist.json"; \
 
 make_icon:
 	@echo "🎨 Creating app icon..."

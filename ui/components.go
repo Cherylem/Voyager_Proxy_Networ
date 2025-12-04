@@ -379,18 +379,12 @@ func (c *Components) GetMainContent() fyne.CanvasObject {
 		c.showWhitelistDialog()
 	})
 
-	// Левая часть с кнопками
-	leftButtons := container.NewVBox(
+	// Верхняя панель: кнопка слева, заголовок отцентрирован, переключатель темы справа
+	header := container.NewBorder(
+		nil, nil,
 		whitelistBtn,
-	)
-
-	// Верхняя панель с кнопками слева, заголовком в центре и переключателем темы справа
-	header := container.NewHBox(
-		leftButtons,
-		layout.NewSpacer(),
-		title,
-		layout.NewSpacer(),
-		c.themeSwitch, // Переключатель темы в правом углу
+		c.themeSwitch,
+		container.NewCenter(title),
 	)
 
 	statusCard := container.NewVBox(
@@ -505,16 +499,20 @@ func (c *Components) showWhitelistDialog() {
 	whitelistList = widget.NewList(
 		func() int { return len(whitelist) },
 		func() fyne.CanvasObject {
-			return container.NewHBox(
-				widget.NewLabel(""),
-				layout.NewSpacer(),
-				widget.NewButton("🗑️", nil),
+			return container.NewVBox(
+				container.NewHBox(
+					widget.NewLabel(""),
+					layout.NewSpacer(),
+					widget.NewButton("🗑️", nil),
+				),
+				widget.NewSeparator(),
 			)
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			cont := o.(*fyne.Container)
-			urlLabel := cont.Objects[0].(*widget.Label)
-			deleteBtn := cont.Objects[2].(*widget.Button)
+			itemContainer := cont.Objects[0].(*fyne.Container)
+			urlLabel := itemContainer.Objects[0].(*widget.Label)
+			deleteBtn := itemContainer.Objects[2].(*widget.Button)
 
 			urlLabel.SetText(whitelist[i])
 
@@ -570,19 +568,33 @@ func (c *Components) showWhitelistDialog() {
 		addBtn,
 	)
 
-	content := container.NewVBox(
-		infoLabel,
-		widget.NewSeparator(),
-		addSection,
-		widget.NewSeparator(),
-		container.NewBorder(
-			widget.NewLabel("Сайты в списке:"),
-			nil, nil, nil,
-			whitelistList,
-		),
-		buttons,
+	// Разметка: информационный текст сверху, кнопки снизу, центр — список сайтов с секцией добавления
+	// Оборачиваем список в вертикальный скролл и задаем минимальный размер,
+	// чтобы он занимал доступное пространство в окне (аналогично списку подключений).
+	vscroll := container.NewVScroll(whitelistList)
+	vscroll.SetMinSize(fyne.NewSize(560, 280))
+
+	listSection := container.NewBorder(
+		widget.NewLabel("Сайты в списке:"),
+		nil, nil, nil,
+		vscroll,
 	)
 
+	center := container.NewVBox(
+		addSection,
+		widget.NewSeparator(),
+		listSection,
+	)
+
+	content := container.NewBorder(
+		infoLabel,
+		buttons,
+		nil,
+		nil,
+		center,
+	)
+
+	// Оборачиваем в Padded для отступов и устанавливаем как контент окна
 	whitelistWindow.SetContent(container.NewPadded(content))
 	whitelistWindow.Show()
 }

@@ -92,7 +92,6 @@ func ParseVLESS(vlessURL string) (*models.Connection, error) {
 			}
 		}
 
-
 	}()
 	// Извлекаем основные параметрыц
 	if security := params.Get("security"); security != "" {

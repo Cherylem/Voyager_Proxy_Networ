@@ -211,43 +211,42 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 						OutboundTag: "direct",
 						Domain:      []string{"geosite:cn"},
 					},
-				{
-					Type:        "field",
-					OutboundTag: "direct",
-					IP:          []string{"geoip:cn", "geoip:private"},
-				},
-				{
-					Type:        "field",
-					OutboundTag: "block",
-					Domain:      []string{"geosite:category-ads-all"},
-				},
-				{
-					Type:        "field",
-					OutboundTag: "block",
-					Port:        "3478,3479,5349,5350",
-				},
-				{
-					Type:        "field",
-					OutboundTag: "block",
-					Protocol:    []string{"bittorrent"},
-				},
-				{
-					Type:        "field",
-					OutboundTag: "proxy",
-					Port:        "53",
-				},
-				{
-					Type:        "field",
-					OutboundTag: "proxy",
-					Domain:      []string{"geosite:geolocation-!cn"},
-				},
-				{
-					Type:        "field",
-					OutboundTag: "proxy",
-					IP:          []string{"0.0.0.0/0", "::/0"},
-				},
+					{
+						Type:        "field",
+						OutboundTag: "direct",
+						IP:          []string{"geoip:cn", "geoip:private"},
+					},
+					{
+						Type:        "field",
+						OutboundTag: "block",
+						Domain:      []string{"geosite:category-ads-all"},
+					},
+					{
+						Type:        "field",
+						OutboundTag: "block",
+						Port:        "3478,3479,5349,5350",
+					},
+					{
+						Type:        "field",
+						OutboundTag: "block",
+						Protocol:    []string{"bittorrent"},
+					},
+					{
+						Type:        "field",
+						OutboundTag: "proxy",
+						Port:        "53",
+					},
+					{
+						Type:        "field",
+						OutboundTag: "proxy",
+						Domain:      []string{"geosite:geolocation-!cn"},
+					},
+					{
+						Type:        "field",
+						OutboundTag: "proxy",
+						IP:          []string{"0.0.0.0/0", "::/0"},
+					},
 				}
-
 
 				if len(whitelist) > 0 {
 					wlRule := RoutingRule{
@@ -284,7 +283,6 @@ func (x *XrayManager) GenerateConfig(conn *models.Connection) (string, error) {
 	fmt.Printf("✅ Xray config generated with DNS/WebRTC leak protection: %s\n", configPath)
 	return configPath, nil
 }
-
 
 func (x *XrayManager) loadWhitelistDomains(preferredPath string) []string {
 
@@ -354,4 +352,3 @@ func (x *XrayManager) loadWhitelistDomains(preferredPath string) []string {
 	}
 	return out
 }
-

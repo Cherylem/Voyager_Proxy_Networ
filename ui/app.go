@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"vpn-client/models"
@@ -163,23 +164,63 @@ func (v *VPNApp) showAddConnectionDialog() {
 
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
+	statusLabel.Alignment = fyne.TextAlignCenter
 
-	content := container.NewVBox(
-		widget.NewLabelWithStyle("Новое подключение", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+	// Заголовок
+	title := widget.NewLabelWithStyle(
+		"Новое подключение",
+		fyne.TextAlignCenter,
+		fyne.TextStyle{Bold: true},
+	)
+
+	// Секция информации
+	infoLabel := widget.NewLabelWithStyle(
+		"Введите VLESS ссылку для добавления нового подключения",
+		fyne.TextAlignCenter,
+		fyne.TextStyle{Italic: true},
+	)
+
+	// Поля ввода с подписями
+	formContent := container.NewVBox(
+		widget.NewLabel("Название (опционально):"),
 		nameEntry,
 		widget.NewLabel("VLESS ссылка:"),
 		configEntry,
-		statusLabel,
+		widget.NewSeparator(),
 	)
 
+	// Статус сервера
+	statusCard := container.NewVBox(
+		container.NewCenter(statusLabel),
+	)
+
+	// Основной контент
+	content := container.NewVBox(
+		title,
+		infoLabel,
+		widget.NewSeparator(),
+		formContent,
+		statusCard,
+	)
+
+	// Кнопки
 	cancelButton := widget.NewButton("Отмена", nil)
 	addButton := widget.NewButton("Добавить", nil)
-	buttons := container.NewHBox(cancelButton, addButton)
+
+	// Стилизация кнопок (используем константы из пакета widget)
+	cancelButton.Importance = widget.LowImportance
+	addButton.Importance = widget.HighImportance
+
+	buttons := container.NewHBox(
+		layout.NewSpacer(),
+		cancelButton,
+		addButton,
+	)
 
 	dialogContent := container.NewBorder(nil, buttons, nil, nil, content)
 	dialog := widget.NewModalPopUp(dialogContent, v.window.Canvas())
 
-	dialog.Resize(fyne.NewSize(600, 500))
+	dialog.Resize(fyne.NewSize(600, 550))
 
 	validateAndParse := func() (*models.Connection, error) {
 		config := configEntry.Text

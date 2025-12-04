@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
 func GetCountryByIPAPI(ip string) (string, error) {
-
-
 	if ip == "" {
 		return "Unknown", nil
 	}
@@ -41,10 +40,11 @@ func GetCountryByIPAPI(ip string) (string, error) {
 		return "", err
 	}
 
-	country := string(body)
+	// Убираем пробелы и переносы строк
+	country := strings.TrimSpace(string(body))
 	if country == "" {
 		return "Unknown", nil
 	}
-	
+
 	return country, nil
 }
